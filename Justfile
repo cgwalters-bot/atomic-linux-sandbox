@@ -71,10 +71,11 @@ build-composefs tag="composefs" source="updates-testing":
 build-transient-etc tag="transient-etc":
     ETC_MODE=transient {{ just_executable() }} --justfile "{{ justfile() }}" build {{ tag }}
 
-# ShellCheck over build scripts, host helpers and tests.
+# ShellCheck over build scripts, host helpers and tests, plus audit parser tests.
 [group('Quality')]
 lint:
     shellcheck build/*.sh custom/system/usr/libexec/k3s-* tests/*.sh tests/kubevirt/*.sh
+    python3 -B -m unittest discover -s tests -p 'test_transient_etc*.py'
 
 # Containerfile lint (pulls the hadolint image).
 [group('Quality')]
