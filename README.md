@@ -124,33 +124,108 @@ Known gaps, as of bootc 1.17.1 (October 2026):
 A derived image inherits the backend. If it changes bootc, it must also
 regenerate the initramfs, which carries bootc's mount code.
 
-## Transient /etc (test variant)
+## Transient /etc (test variant, opt-in)
 
-A first step towards a stateless host. `just build-transient-etc` builds
-`atomic-linux:transient-etc` with ostree's `etc.transient` set in
-`/usr/lib/ostree/prepare-root.conf` (and so in a regenerated initramfs): `/etc`
-is an overlay of the image's `/etc` with its upper on a tmpfs, and anything
-written to it is gone after a reboot. It is a test variant on the ostree
-backend only, not for real hosts: it also boots with `audit=1` and an audit
-watch on writes to `/etc`.
+`just build-transient-etc` builds `atomic-linux:transient-etc` with ostree's
+`etc.transient`: `/etc` is an overlay whose upperdir is on tmpfs, reset on
+every boot. `ETC_MODE` defaults to `persistent`; the normal image and stable
+promotion are unchanged. Transient mode refuses `STORAGE_BACKEND=composefs`,
+which does not use ostree's `prepare-root.conf`. The build preserves the
+base configuration, regenerates the initramfs with ostree's dracut module,
+and verifies that its copy of `prepare-root.conf` enables transient mode.
+`bootc container lint --fatal-warnings` remains mandatory.
 
-```sh
-just build-transient-etc
-just transient-etc-vm-test    # writes output/transient-etc-report.md
-```
+With bcvk, libvirt and KVM, run `just transient-etc-vm-test`. This installs a
+disposable VM, asserts a tmpfs-backed `/etc`, writes a marker, reboots and
+asserts the marker disappeared. Unlike `bcvk ephemeral`, this actually
+exercises ostree-prepare-root. Only this variant includes the early audit
+watch, `audit=1` and an audit-rules drop-in. It is measurement instrumentation,
+not a security enforcement boundary; the test intentionally changes `/etc`.
 
-`transient-etc-vm-test` installs the build in a disposable libvirt VM
-(`KEEP_FAILED_VM=1` keeps a failed one; `bcvk ephemeral` cannot test this, as
-it boots without `ostree-prepare-root`). It fails only if the VM does not
-boot, `/etc` is not a tmpfs-backed overlay, or a file written to `/etc`
-survives a reboot. It then reaches GDM and uses NetworkManager, firewalld,
-podman, `timedatectl`, `hostnamectl` and k3s, and reports every path in the
-overlay's upper with the program and systemd unit that the audit records name
-as its writer; writes with no record, such as those made in the initramfs
-before the watch is loaded early in `sysinit.target`, are listed as
-unattributed. That report is the
-list of what must move to `/usr` or to declarative configuration before
-`/etc` can be transient by default.
+The exercised scope is GDM/graphical.target activation (not interactive
+login), NetworkManager connection add/delete, a runtime firewalld port
+change/revert, podman running a small remote image, timezone and hostname
+changes, and enabling k3s through its existing preflight then running
+`k3s-validate`. Each service step is bounded; failures remain visible findings.
+The podman image is not pinned, so remote availability/content can affect
+that exercise. No services are migrated in this phase.
+
+`output/transient-etc-report.md` lists audit-observed operations, including
+create-then-delete and rename endpoints absent from the final upperdir,
+separately from the final upperdir inventory. Failed syscalls are attempts,
+not successful writes; even a successful watched syscall can include an
+unmodified operand. Upperdir-only paths, including parent copy-ups, are
+unattributed. Relative dirfd paths remain unresolved, never matched by
+basename. Writers show audit executable/comm/PID; service identity is unknown
+unless recorded in the event as a unit or an unambiguous service cgroup.
+No current PID lookup, parent-unit inference or executable-name mapping is
+used. Standard syscall audit records often lack unit/cgroup evidence;
+synthetic cgroup tests are not evidence of live service attribution.
+
+The collector compares `SYSCALL items` with all `PATH` indexes (including
+PARENT and null-name records). Partially missing rename/multi-path events,
+duplicates and malformed item metadata are reported with event IDs and
+expected/received items, rather than silently appearing complete. Acceptance
+requires the early watch to be active/exited with a successful result, zero
+exit status, a satisfied condition and a nonzero activation timestamp; a
+working late watch alone cannot hide a failed/skipped early unit.
+The report exposes audit lost/backlog counters and describes initramfs,
+rule-reload and nested-mount gaps. It is not a complete census. A missing
+watch, missing audit probe, or failed collector fails acceptance.
+
+Diagnostics (install/exercise/collector logs, journal for both boots, raw
+audit log and VM state) are collected best effort before cleanup beside the
+report in `output/transient-etc-report-diagnostics/`, even after failure.
+`KEEP_FAILED_VM=1` retains a failed VM. Reports identify candidates to move
+to `/usr` or declarative configuration before considering a default change.
+
+An unreachable guest, stuck SSH client or blocked libvirt operation must not
+hang this test's failure path. Host-side `timeout` bounds each call and kills
+clients still running two seconds after TERM. Positive integer second budgets
+are `VM_CALL_TIMEOUT=120`, `INSTALL_TIMEOUT_SECS=1800`,
+`EXERCISE_TIMEOUT_SECS=900`, `DIAGNOSTIC_TIMEOUT_SECS=30` (per diagnostic),
+`CLEANUP_TIMEOUT_SECS=60` and `BOOT_WAIT_SECS=300`. Reboot polls use the
+remaining reboot budget. These are test deadlines, not image security controls.
+Diagnostics remain best effort; failed cleanup fails an otherwise successful
+test but never replaces the original failure status. Final acceptance is
+reported only after cleanup. Killing an install/client may leave guest-side
+work or a VM behind; cleanup is attempted even after a failed install, and
+cleanup failures are reported rather than claimed as removal.
+
+Validation status: this continues [draft #19](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/19)
+at `a8e823a12c17620c3ba98d36a23dfa5748a12a95`, which incorporates #18 and
+[#17](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/17).
+Synthetic parser and transport tests do not boot the image. No transient VM
+findings or real boot/report artifact are available from this run. `/dev/kvm`
+exists but the read/write access check fails; disk preflight found sufficient
+space, but bcvk and virsh
+are absent and a small Podman container cannot start (crun sd-bus error).
+Neither the multi-GB build nor VM recipe was run after this failed preflight.
+`just lint` retains the 21 collector tests and adds mocked acceptance-driver
+regressions for hung/unreachable guests, install/reboot/diagnostic timeouts,
+failed collectors and cleanup, original exit status and failed-VM retention.
+`just fmt-check` and `git diff --check` pass. `just hadolint` fails before
+linting because of the same crun sd-bus error (an earlier attempt also failed
+joining Podman's user namespace); `just lint-workflows`
+cannot find the required sibling actions checkout. Actual transient build,
+boot/mount-reset assertions, service exercises and live rename/create-delete/
+failed-attempt observations remain unverified. There are no measured service
+or path identities or audit-loss counts to report from this run.
+
+The required separate, non-gating workflow and
+stale action-pin fixes remain undelivered: this run's handback policy
+protects all `.github/` paths and provides no workflow-edit exception.
+This is a tracker dispatch/apply controller dependency, not a request to relax
+policy. #15 closed unmerged; replacement
+[#20](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/20) remains
+open. Its latest lint job (129580620753, run 42740670388) still reports
+`ref-version-mismatch` for setup-runner in build.yml and composefs.yml: its
+pin `460aab74615e911b69d2c1dc86bfb08442b15188` is annotated `v1`, while the
+job resolved that tag to `6453818f6279`. No lint suppression or permission
+change is proposed here. Existing
+ordinary-image and composefs CI successes do not validate this variant.
+Do not infer machine-id or installer configuration behavior until an
+installed transient VM has been measured and its actual report linked here.
 
 ## Build and test
 
