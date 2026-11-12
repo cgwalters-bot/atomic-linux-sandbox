@@ -82,9 +82,20 @@ def parse_events(text):
         elif fields.get("type") == "CWD":
             event["cwd"] = fields.get("cwd", "?")
         elif fields.get("type") == "PATH":
-            if fields.get("name", "(null)") != "(null)":
-                event["paths"].append(fields)
+            # Even null names occupy a SYSCALL item. Keep them for coverage
+            # accounting, though they cannot become path observations.
+            event["paths"].append(fields)
     return events
+
+
+def incomplete_event(event):
+    """Require all advertised PATH items, not merely one surviving path."""
+    try:
+        count = int(event["syscall"]["items"])
+        items = [int(path["item"]) for path in event["paths"]]
+    except (KeyError, ValueError):
+        return True
+    return count < 0 or len(items) != count or set(items) != set(range(count))
 
 
 def audit_events():
@@ -118,7 +129,7 @@ def observations(events):
         outcome = {"yes": "successful watched operation", "no": "failed attempt"}.get(
             sc.get("success"), "outcome unknown")
         for fields in event["paths"]:
-            if fields.get("nametype") == "PARENT":
+            if fields.get("nametype") == "PARENT" or fields.get("name", "(null)") == "(null)":
                 continue
             name = fields["name"]
             # Relative PATH names can be relative to openat/renameat dirfds,
@@ -148,7 +159,7 @@ def render_report(upper, entries, events, audit_status, audit_rules, watch_statu
     rows = observations(events)
     successful = {r[0] for r in rows if r[1] == "absolute audit path"
                   and r[2] == "successful watched operation"}
-    incomplete = sum(not e["syscall"] or not e["paths"] for e in events.values())
+    incomplete = sum(incomplete_event(e) for e in events.values())
     lines = [f"Upperdir: `{cell(upper)}`; {len(entries)} entries; {len(events)} audit events.",
              "", "## Coverage and limitations", "",
              "This is an observation window, not proof of every /etc mutation. "
@@ -161,7 +172,8 @@ def render_report(upper, entries, events, audit_status, audit_rules, watch_statu
              "Audit loss/backlog below is a snapshot, not a guarantee of completeness. "
              "Relative dirfd paths remain unresolved. No basename or PID/parent "
              "heuristic is used; service attribution is unknown unless in the event.",
-             f"", f"Incomplete event groups: {incomplete} (possible collection gap).", ""]
+             "", f"Incomplete event groups: {incomplete} (possible collection gap; "
+             "SYSCALL items compared with PATH item indexes, including null names).", ""]
     for title, value in (("Audit status (lost/backlog/enabled)", audit_status),
                          ("Active audit rules", audit_rules),
                          ("Early watch unit", watch_status)):
@@ -186,7 +198,16 @@ def main():
                for line in rules.splitlines()):
         raise RuntimeError("expected /etc write/attribute audit watch is missing")
     watch = checked("systemctl", "show", "atomic-linux-etc-watch.service",
-                    "-p", "ActiveState", "-p", "Result", "-p", "ActiveEnterTimestampMonotonic")
+                    "-p", "ActiveState", "-p", "SubState", "-p", "Result",
+                    "-p", "ExecMainStatus", "-p", "ActiveEnterTimestampMonotonic")
+    watch_fields = dict(line.split("=", 1) for line in watch.splitlines() if "=" in line)
+    activated = watch_fields.get("ActiveEnterTimestampMonotonic", "")
+    if (watch_fields.get("ActiveState") != "active"
+            or watch_fields.get("SubState") != "exited"
+            or watch_fields.get("Result") != "success"
+            or watch_fields.get("ExecMainStatus") != "0"
+            or not activated.isdecimal() or int(activated) <= 0):
+        raise RuntimeError("early /etc audit watch did not activate successfully")
     events = audit_events()
     probe = "/etc/atomic-linux-transient-etc-audit-probe"
     if not any(row[0] == probe and row[2] == "successful watched operation"

@@ -56,7 +56,8 @@ echo "/etc is an overlay with its upperdir ${upper} on tmpfs"'
 
 vm_script() {
 	local interpreter=$1 script
-	script=$(base64 -w0 "$2")
+	# Callers test the function's status, disabling errexit inside it.
+	script=$(base64 -w0 "$2") || return "$?"
 	vm "echo ${script} | base64 -d > /var/tmp/atomic-linux-test-script && ${interpreter} /var/tmp/atomic-linux-test-script"
 }
 

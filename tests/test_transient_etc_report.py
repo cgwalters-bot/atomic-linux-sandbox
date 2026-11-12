@@ -17,10 +17,10 @@ spec.loader.exec_module(report)
 def event(serial, names, success="yes", extra=""):
     lines = [f'type=SYSCALL msg=audit(123.000:{serial}): arch=c000003e syscall=257 '
              f'success={success} exit=3 pid=42 ppid=1 comm="helper" exe="/usr/bin/helper" '
-             f'key="atomic-linux-etc" {extra}',
+             f'key="atomic-linux-etc" items={len(names)} {extra}',
              f'type=CWD msg=audit(123.000:{serial}): cwd="/etc"']
-    for name, kind in names:
-        lines.append(f'type=PATH msg=audit(123.000:{serial}): name={name} nametype={kind}')
+    for item, (name, kind) in enumerate(names):
+        lines.append(f'type=PATH msg=audit(123.000:{serial}): item={item} name={name} nametype={kind}')
     return "\n".join(lines)
 
 
@@ -90,6 +90,31 @@ class ParserTests(unittest.TestCase):
         self.assertIn("outcome unknown", out)
         self.assertNotIn("| successful watched operation |", out)
 
+    def test_partial_multipath_event_is_incomplete(self):
+        text = event(1, [('"/etc/old"', "DELETE"), ('"/etc/new"', "CREATE")])
+        out = self.render("\n".join(text.splitlines()[:-1]))
+        self.assertIn("Incomplete event groups: 1", out)
+        self.assertIn("| /etc/old |", out)
+
+    def test_path_item_indexes_must_match(self):
+        text = event(1, [('"/etc/old"', "DELETE"), ('"/etc/new"', "CREATE")])
+        for altered in (text.replace("item=1", "item=0"),
+                        text.replace("item=1", "item=2"),
+                        text.replace("items=2", "items=unknown"),
+                        text.replace("items=2", "")):
+            with self.subTest(text=altered):
+                self.assertIn("Incomplete event groups: 1", self.render(altered))
+
+    def test_null_path_counts_without_becoming_an_observation(self):
+        out = self.render(event(1, [('(null)', "NORMAL"), ('"/etc/new"', "CREATE")]))
+        self.assertIn("Incomplete event groups: 0", out)
+        self.assertNotIn("| (null) |", out)
+
+    def test_complete_rename_and_zero_item_events(self):
+        for names in ([], [('"/etc/old"', "DELETE"), ('"/etc/new"', "CREATE")]):
+            with self.subTest(names=names):
+                self.assertIn("Incomplete event groups: 0", self.render(event(1, names)))
+
     def test_ausearch_errors_and_empty_results_fail(self):
         for code, text in ((2, "bad input"), (1, "<no matches>"), (0, "")):
             with self.subTest(code=code), patch.object(report, "run", return_value=
@@ -105,6 +130,30 @@ class ParserTests(unittest.TestCase):
 
 
 class AcceptanceTests(unittest.TestCase):
+    def collect(self, watch):
+        events = report.parse_events(event(1, [
+            ('"/etc/atomic-linux-transient-etc-audit-probe"', "CREATE")]))
+        with patch.object(report, "upperdir", return_value="/run/upper"), \
+                patch.object(report, "upper_entries", return_value=[]), \
+                patch.object(report, "audit_events", return_value=events), \
+                patch.object(report, "checked", side_effect=[
+                    "enabled 1", "-w /etc -p wa -k atomic-linux-etc", watch]), \
+                patch("builtins.print") as output:
+            report.main()
+            return output
+
+    def test_early_watch_success_required(self):
+        watch = ("ActiveState=active\nSubState=exited\nResult=success\n"
+                 "ExecMainStatus=0\nActiveEnterTimestampMonotonic=12345\n")
+        self.assertTrue(self.collect(watch).called)
+        for old, new in (("active", "inactive"), ("exited", "dead"),
+                         ("success", "exit-code"), ("ExecMainStatus=0", "ExecMainStatus=1"),
+                         ("=12345", "=0"), ("=12345", "=unknown"), ("=12345", "=")):
+            with self.subTest(new=new), self.assertRaisesRegex(RuntimeError, "did not activate"):
+                self.collect(watch.replace(old, new))
+        with self.assertRaisesRegex(RuntimeError, "did not activate"):
+            self.collect("")
+
     def run_fake_vm(self, mode):
         """Only emulate the transport: verify failure propagation, not boot."""
         with tempfile.TemporaryDirectory() as directory:
@@ -134,6 +183,14 @@ elif "base64 -d" in cmd:
             sleep = root / "sleep"
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
+            base64 = root / "base64"
+            base64.write_text('''#!/usr/bin/env python3
+import os, sys
+if os.environ["FAKE_MODE"] == "encode-fails" and sys.argv[-1].endswith("transient-etc-report.py"):
+    sys.exit(7)
+os.execv("/usr/bin/base64", ["base64", *sys.argv[1:]])
+''')
+            base64.chmod(0o755)
             output = root / "report.md"
             env = dict(os.environ, BCVK=str(bcvk), FAKE_MODE=mode,
                        FAKE_STATE=str(root / "state"), PATH=f"{root}:{os.environ['PATH']}")
@@ -145,6 +202,13 @@ elif "base64 -d" in cmd:
     def test_collector_failure_fails_acceptance(self):
         result, text, diagnostic = self.run_fake_vm("collector-fails")
         self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertIn("acceptance FAILED", text)
+        self.assertNotIn("Acceptance passed", text)
+        self.assertTrue(diagnostic)
+
+    def test_collector_encoding_failure_fails_acceptance(self):
+        result, text, diagnostic = self.run_fake_vm("encode-fails")
+        self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn("acceptance FAILED", text)
         self.assertNotIn("Acceptance passed", text)
         self.assertTrue(diagnostic)
