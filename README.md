@@ -176,7 +176,9 @@ watch, missing audit probe, or failed collector fails acceptance.
 Diagnostics (install/exercise/collector logs, journal for both boots, raw
 audit log and VM state) are collected best effort before cleanup beside the
 report in `output/transient-etc-report-diagnostics/`, even after failure.
-SSH calls are bounded by `VM_SSH_TIMEOUT` (900 seconds by default);
+SSH calls are bounded by `VM_SSH_TIMEOUT` (900 seconds by default). The
+service exercise instead shares `EXERCISE_TIMEOUT` (780 seconds by default)
+across its steps inside the VM, with two more minutes for its SSH call;
 diagnostics and removal each use `VM_CLEANUP_TIMEOUT` (30 seconds by default).
 `KEEP_FAILED_VM=1` retains a failed VM. Reports identify candidates to move
 to `/usr` or declarative configuration before considering a default change.

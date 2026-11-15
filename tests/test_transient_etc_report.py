@@ -43,6 +43,13 @@ class ParserTests(unittest.TestCase):
             ('"/etc/old"', "DELETE"), ('"/etc/new"', "CREATE"), ('"/etc"', "PARENT")])))
         self.assertEqual([r[0] for r in rows], ["/etc/old", "/etc/new"])
 
+    def test_failed_cross_mount_rename_keeps_both_operands(self):
+        out = self.render(event(1, [('"/var/tmp/staged"', "NORMAL"), ('"/etc/new"', "CREATE")], "no"),
+                          [("/etc/new", "file")])
+        self.assertIn("| /var/tmp/staged | absolute path outside /etc", out)
+        self.assertIn("| /etc/new | absolute audit path | failed attempt |", out)
+        self.assertNotIn("see successful", out)
+
     def test_failed_attempt_does_not_attribute_upperdir(self):
         out = self.render(event(1, [('"/etc/denied"', "NORMAL")], "no"),
                           [("/etc/denied", "file")])
@@ -89,7 +96,7 @@ class ParserTests(unittest.TestCase):
 
     def test_loss_early_boot_and_incomplete_groups_visible(self):
         out = self.render('type=PATH msg=audit(123.000:1): name="/etc/lost" nametype=CREATE')
-        self.assertIn("lost 7", out)
+        self.assertIn("enabled 1\nlost 7\nbacklog 3", out)
         self.assertIn("Early-boot gap", out)
         self.assertIn("Incomplete event groups: 1", out)
         self.assertIn("task,never", out)
@@ -245,6 +252,29 @@ elif "base64 -d" in cmd:
         result, text, _ = self.run_fake_vm("diagnostics-hang")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Acceptance exit status: 0", text)
+
+    def test_exercise_steps_share_one_budget(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for tool, status in (("systemctl", 0), ("nmcli", 3), ("firewall-cmd", 3),
+                                 ("podman", 3), ("timedatectl", 3), ("hostnamectl", 3)):
+                (root / tool).write_text(f"#!/bin/sh\nexit {status}\n")
+                (root / tool).chmod(0o755)
+            env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", K3S_VALIDATE=str(root / "nmcli"))
+            for budget, expected in (("0", "**skipped** (exercise budget exhausted)"),
+                                     ("100", "**failed** (exit 3): NetworkManager")):
+                with self.subTest(budget=budget):
+                    result = subprocess.run(["bash", str(TESTS / "transient-etc-exercise.sh"), budget],
+                                            env=env, capture_output=True, text=True, timeout=30)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(expected, result.stdout)
+                    self.assertEqual(result.stdout.count("skipped"), 12 if budget == "0" else 0)
+            # A slow step uses up the budget: it is cut short and the rest skip.
+            (root / "nmcli").write_text("#!/bin/sh\nexec sleep 5\n")
+            result = subprocess.run(["bash", str(TESTS / "transient-etc-exercise.sh"), "2"],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertIn("**failed** (exit 124): NetworkManager: add", result.stdout)
+            self.assertEqual(result.stdout.count("skipped"), 9, result.stdout)
 
     def test_hung_removal_fails_acceptance(self):
         result, text, _ = self.run_fake_vm("cleanup-hangs")

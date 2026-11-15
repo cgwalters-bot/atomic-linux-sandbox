@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 # Helpers for the disposable libvirt VM tests, sourced by them. The caller
 # sets VM_NAME, and may set BCVK, BCVK_CONNECTION, BOOT_WAIT_SECS and
-# VM_SSH_TIMEOUT (seconds, default 900, including long service exercises).
+# VM_SSH_TIMEOUT (seconds per SSH call, default 900).
 
 BCVK="${BCVK:-bcvk}"
 BCVK_CONNECTION="${BCVK_CONNECTION:-qemu:///session}"

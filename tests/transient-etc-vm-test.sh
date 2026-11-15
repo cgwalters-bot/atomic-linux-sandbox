@@ -4,12 +4,18 @@
 # boot, or transient-mount/reset assertions fail acceptance.
 # Usage: transient-etc-vm-test.sh IMAGE [REPORT]
 # Environment: BCVK, BCVK_CONNECTION, VM_SSH_TIMEOUT (default 900 seconds),
+# EXERCISE_TIMEOUT (default 780 seconds for all exercise steps),
 # VM_CLEANUP_TIMEOUT (default 30 seconds per call); KEEP_FAILED_VM=1 retains a failed VM.
 
 set -euo pipefail
 
 image="${1:?usage: $0 IMAGE [REPORT]}"
 report="${2:-output/transient-etc-report.md}"
+exercise_timeout="${EXERCISE_TIMEOUT:-780}"
+if [[ ! "${exercise_timeout}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+	echo "error: EXERCISE_TIMEOUT must be whole seconds, not '${exercise_timeout}'" >&2
+	exit 2
+fi
 tests_dir=$(dirname "$0")
 # shellcheck source=tests/libvirt-vm.sh
 source "${tests_dir}/libvirt-vm.sh"
@@ -58,11 +64,12 @@ test "$(findmnt -no FSTYPE --target "${upper}")" = tmpfs
 echo "/etc is an overlay with its upperdir ${upper} on tmpfs"'
 }
 
-# Run a local script in the VM as root.
+# Run a local script in the VM as root, with optional numeric arguments.
 vm_script() {
 	local interpreter=$1 script
 	script=$(base64 -w0 "$2")
-	vm "echo ${script} | base64 -d > /var/tmp/atomic-linux-test-script && ${interpreter} /var/tmp/atomic-linux-test-script"
+	shift 2
+	vm "echo ${script} | base64 -d > /var/tmp/atomic-linux-test-script && ${interpreter} /var/tmp/atomic-linux-test-script $*"
 }
 
 # Set created first: a failed SSH wait can still leave a defined VM behind.
@@ -79,7 +86,9 @@ expect_transient_etc >>"${report}"
 # Assert absence directly: a lost SSH connection must not look like absence.
 vm "test ! -e ${MARKER}"
 printf '\nMount and reboot-reset assertions passed.\n\n## Exercised\n\n' >>"${report}"
-vm_script bash "${tests_dir}/transient-etc-exercise.sh" >>"${report}" 2>"${diagnostics}/exercise.log" ||
+# The script stops itself within its budget; SSH gets a margin on top.
+VM_SSH_TIMEOUT=$((exercise_timeout + 120)) vm_script bash "${tests_dir}/transient-etc-exercise.sh" "${exercise_timeout}" \
+	>>"${report}" 2>"${diagnostics}/exercise.log" ||
 	printf '\n**Exercise script failed (exit %s); scope is incomplete.**\n' "$?" >>"${report}"
 
 # Create then delete: the collector must observe a path absent from upperdir.

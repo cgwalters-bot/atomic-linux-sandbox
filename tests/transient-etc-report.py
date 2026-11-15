@@ -150,9 +150,13 @@ def observations(events):
             # Relative PATH names may use openat/renameat dirfds, not CWD.
             if name.startswith("/"):
                 path = os.path.normpath(name)
-                if path != ETC and not path.startswith(ETC + "/"):
-                    continue
-                resolution = "absolute audit path"
+                # Keep other operands of a watched event visible, such as a
+                # failed cross-mount rename or /etc reached through another
+                # mount or namespace; such aliases are not resolved.
+                if path == ETC or path.startswith(ETC + "/"):
+                    resolution = "absolute audit path"
+                else:
+                    resolution = "absolute path outside /etc (unresolved alias or operand)"
             else:
                 path = name
                 resolution = f"unresolved relative path (cwd {event['cwd']}; dirfd unknown)"
@@ -163,9 +167,12 @@ def observations(events):
     return rows
 
 
+def escape(value):
+    return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def cell(value):
-    return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(
-        ">", "&gt;").replace("|", "&#124;").replace("\n", " ").replace("\r", " ").replace("`", "&#96;")
+    return escape(value).replace("|", "&#124;").replace("\n", " ").replace("\r", " ").replace("`", "&#96;")
 
 
 def render_report(upper, entries, events, audit_status, audit_rules, watch_status):
@@ -178,7 +185,8 @@ def render_report(upper, entries, events, audit_status, audit_rules, watch_statu
              "This is an observation window, not proof of every /etc mutation. "
              "Successful watched syscalls are distinct from failed attempts; "
              "NORMAL paths may be operands, not modified files. CREATE/DELETE "
-             "include rename endpoints. Parent copy-ups do not identify writers.",
+             "include rename endpoints. Absolute paths outside /etc are operands such as "
+             "symlink targets, or aliases of /etc (bind mounts, other namespaces); they are not attributed. Parent copy-ups do not identify writers.",
              "", "Early-boot gap: initramfs and writes before the early watch are not observed. "
              "audit-rules reload removes/reinstalls the watch; task,never can leave "
              "processes without audit contexts. Nested mounts may escape the watch. "
@@ -196,7 +204,8 @@ def render_report(upper, entries, events, audit_status, audit_rules, watch_statu
     for title, value in (("Audit status (lost/backlog/enabled)", audit_status),
                          ("Active audit rules", audit_rules),
                          ("Early watch unit", watch_status)):
-        lines += [f"### {title}", "", "<pre>", cell(value), "</pre>", ""]
+        # One record per line: these are multi-line command outputs.
+        lines += [f"### {title}", "", "<pre>", escape(value).strip(), "</pre>", ""]
     lines += ["## Audit-observed operations (including paths absent from upperdir)", "",
               "| Path | Resolution | Result | PATH type | Event / syscall | Writer |",
               "| --- | --- | --- | --- | --- | --- |"]
