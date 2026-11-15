@@ -109,7 +109,9 @@ ostree)
 		echo "error: expected ${PREPARE_ROOT_CONF} without an [etc] section, and no /etc/ostree/prepare-root.conf" >&2
 		exit 1
 	fi
-	printf '[etc]\ntransient = true\n' >>"${PREPARE_ROOT_CONF}"
+	# The leading newline keeps [etc] off the last line of a file that
+	# lacks a trailing one.
+	printf '\n[etc]\ntransient = true\n' >>"${PREPARE_ROOT_CONF}"
 
 	# The boot arguments and audit watch that the VM test's report needs.
 	rsync -rvK --chmod=D0755,F0644 /ctx/custom/transient-etc/ /

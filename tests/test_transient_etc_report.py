@@ -133,6 +133,11 @@ class ParserTests(unittest.TestCase):
         self.assertIn("outcome unknown", out)
         self.assertNotIn("| successful watched operation |", out)
 
+    def test_complete_rename_and_zero_item_events(self):
+        for names in ([], [('"/etc/old"', "DELETE"), ('"/etc/new"', "CREATE")]):
+            with self.subTest(names=names):
+                self.assertIn("Incomplete event groups: 0", self.render(event(1, names)))
+
     def test_ausearch_errors_and_empty_results_fail(self):
         for code, text in ((2, "bad input"), (1, "<no matches>"), (0, "")):
             with self.subTest(code=code), patch.object(report, "run", return_value=
@@ -208,6 +213,14 @@ elif "base64 -d" in cmd:
             sleep = root / "sleep"
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
+            base64 = root / "base64"
+            base64.write_text('''#!/usr/bin/env python3
+import os, sys
+if os.environ["FAKE_MODE"] == "encode-fails" and sys.argv[-1].endswith("transient-etc-report.py"):
+    sys.exit(7)
+os.execv("/usr/bin/base64", ["base64", *sys.argv[1:]])
+''')
+            base64.chmod(0o755)
             output = root / "report.md"
             env = dict(os.environ, BCVK=str(bcvk), FAKE_MODE=mode,
                        FAKE_STATE=str(root / "state"), PATH=f"{root}:{os.environ['PATH']}")
@@ -219,6 +232,13 @@ elif "base64 -d" in cmd:
     def test_collector_failure_fails_acceptance(self):
         result, text, diagnostic = self.run_fake_vm("collector-fails")
         self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertIn("acceptance FAILED", text)
+        self.assertNotIn("Acceptance passed", text)
+        self.assertTrue(diagnostic)
+
+    def test_collector_encoding_failure_fails_acceptance(self):
+        result, text, diagnostic = self.run_fake_vm("encode-fails")
+        self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn("acceptance FAILED", text)
         self.assertNotIn("Acceptance passed", text)
         self.assertTrue(diagnostic)
