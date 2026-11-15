@@ -176,33 +176,16 @@ watch, missing audit probe, or failed collector fails acceptance.
 Diagnostics (install/exercise/collector logs, journal for both boots, raw
 audit log and VM state) are collected best effort before cleanup beside the
 report in `output/transient-etc-report-diagnostics/`, even after failure.
+SSH calls are bounded by `VM_SSH_TIMEOUT` (900 seconds by default);
+diagnostics and removal each use `VM_CLEANUP_TIMEOUT` (30 seconds by default).
 `KEEP_FAILED_VM=1` retains a failed VM. Reports identify candidates to move
 to `/usr` or declarative configuration before considering a default change.
 
-Validation status: this continues [draft #18](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/18)
-at `523347b7b04dd1c918a2b63de76430236880c010`, which incorporates
-[#17](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/17).
-Synthetic parser and transport tests do not boot the image. No transient VM
-findings or real boot/report artifact are available from this run. `/dev/kvm`
-is accessible, but bcvk and libvirt are not installed. The transient build
-failed at its first container `RUN` with both crun and runc, before the
-variant's build step. `just transient-etc-vm-test` was attempted but cannot
-install/boot without bcvk. `just lint` (21 synthetic tests), `just fmt-check`
-and `git diff --check` pass; `just hadolint` and `just lint-workflows` were
-attempted but container-runtime failures prevented completing them. Actual
-transient boot/mount-reset assertions, service exercises and live collector
-validation remain unrun.
-
-The required separate, non-gating workflow and
-stale action-pin fixes remain undelivered: this run's handback policy
-protects all `.github/` paths and provides no workflow-edit exception.
-[#15](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/15) is still
-open and already proposes setup-runner pin updates; recheck it on an
-authorized runner rather than duplicating those updates. The current #18
-lint failure reports mismatched setup-runner version annotations. Existing
-ordinary-image and composefs CI successes do not validate this variant.
-Do not infer machine-id or installer configuration behavior until an
-installed transient VM has been measured and its actual report linked here.
+Synthetic parser and transport tests do not boot the image. Ordinary-image
+and composefs CI successes do not validate this variant. Validate it with
+`just build-transient-etc` and `just transient-etc-vm-test`, and retain the
+report with its diagnostics. Do not infer machine-id, installer configuration
+or service attribution behavior without an installed transient VM's report.
 
 ## Build and test
 

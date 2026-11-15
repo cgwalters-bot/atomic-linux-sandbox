@@ -92,6 +92,10 @@ def incomplete_event(event):
     """Check item identities as well as counts; duplicates cannot hide loss."""
     sc = event["syscall"]
     paths = event["paths"]
+    # Rule-change and other auxiliary groups have no PATH inventory. Keep
+    # orphan PATH records visible: they can indicate a lost SYSCALL record.
+    if not sc and not paths:
+        return False
     try:
         expected = int(sc["items"])
         indexes = [int(path["item"]) for path in paths]

@@ -3,7 +3,8 @@
 # skips ostree-prepare-root). Findings are non-gating; failed collection,
 # boot, or transient-mount/reset assertions fail acceptance.
 # Usage: transient-etc-vm-test.sh IMAGE [REPORT]
-# Environment: BCVK, BCVK_CONNECTION; KEEP_FAILED_VM=1 retains a failed VM.
+# Environment: BCVK, BCVK_CONNECTION, VM_SSH_TIMEOUT (default 900 seconds),
+# VM_CLEANUP_TIMEOUT (default 30 seconds per call); KEEP_FAILED_VM=1 retains a failed VM.
 
 set -euo pipefail
 
@@ -27,6 +28,7 @@ cleanup() {
 	status=$?
 	trap - EXIT
 	if ((created)); then
+		local VM_SSH_TIMEOUT="${VM_CLEANUP_TIMEOUT:-30}"
 		# Best effort, before deleting the VM. No /etc contents are archived.
 		vm 'journalctl -b --no-pager' >"${diagnostics}/journal.txt" 2>&1 || true
 		vm 'journalctl -b -1 --no-pager' >"${diagnostics}/previous-journal.txt" 2>&1 || true
@@ -35,7 +37,8 @@ cleanup() {
 		if ((status != 0 && ${KEEP_FAILED_VM:-0} == 1)); then
 			printf 'Retaining failed VM %s\n' "${VM_NAME}" >&2
 		else
-			"${BCVK}" libvirt --connect "${BCVK_CONNECTION}" rm --force "${VM_NAME}" || status=1
+			timeout --kill-after=5s "${VM_CLEANUP_TIMEOUT:-30}" \
+				"${BCVK}" libvirt --connect "${BCVK_CONNECTION}" rm --force "${VM_NAME}" || status=1
 		fi
 	fi
 	printf '\nAcceptance exit status: %s (zero requires mount/reset assertions and report collection).\n' "${status}" >>"${report}"

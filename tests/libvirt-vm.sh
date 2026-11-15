@@ -1,13 +1,15 @@
 #!/usr/bin/bash
 # Helpers for the disposable libvirt VM tests, sourced by them. The caller
-# sets VM_NAME, and may set BCVK, BCVK_CONNECTION and BOOT_WAIT_SECS.
+# sets VM_NAME, and may set BCVK, BCVK_CONNECTION, BOOT_WAIT_SECS and
+# VM_SSH_TIMEOUT (seconds, default 900, including long service exercises).
 
 BCVK="${BCVK:-bcvk}"
 BCVK_CONNECTION="${BCVK_CONNECTION:-qemu:///session}"
 BOOT_WAIT_SECS="${BOOT_WAIT_SECS:-300}"
 
 vm() {
-	"${BCVK}" libvirt --connect "${BCVK_CONNECTION}" ssh "${VM_NAME}" "$@"
+	timeout --kill-after=5s "${VM_SSH_TIMEOUT:-900}" \
+		"${BCVK}" libvirt --connect "${BCVK_CONNECTION}" ssh "${VM_NAME}" "$@"
 }
 
 # Waits for a new boot ID, so a slow shutdown is not mistaken for the reboot.

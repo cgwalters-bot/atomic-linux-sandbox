@@ -102,6 +102,14 @@ class ParserTests(unittest.TestCase):
         self.assertIn("expected items=2; received PATH indexes=['0']", out)
         self.assertIn("| /etc/old |", out)
 
+    def test_rule_changes_are_not_incomplete_path_groups(self):
+        text = '\n'.join(
+            f'type=CONFIG_CHANGE msg=audit(123.000:{index}): op={op} key="atomic-linux-etc"'
+            for index, op in enumerate(("add_rule", "remove_rule")))
+        self.assertIn("Incomplete event groups: 0", self.render(text))
+        self.assertIn("Incomplete event groups: 1", self.render(
+            text + '\ntype=PATH msg=audit(123.000:3): item=0 name="/etc/lost"'))
+
     def test_path_metadata_mismatch(self):
         text = event(1, [('"/etc/old"', "DELETE"), ('"/etc/new"', "CREATE")])
         for broken in (text.replace("item=1", "item=0"), text.replace("item=1", "item=2"),
@@ -172,12 +180,18 @@ class AcceptanceTests(unittest.TestCase):
             root = Path(directory)
             bcvk = root / "bcvk"
             bcvk.write_text('''#!/usr/bin/env python3
-import os, sys
+import os, sys, time
 from pathlib import Path
 args = sys.argv[1:]
+mode = os.environ["FAKE_MODE"]
+if "rm" in args and mode == "cleanup-hangs":
+    time.sleep(60)
 if "ssh" not in args:
     sys.exit(0)
 cmd = args[-1]
+if (mode == "ssh-hangs" and cmd.startswith("set -eu")) or (
+        mode == "diagnostics-hang" and cmd.startswith("journalctl")):
+    time.sleep(60)
 if cmd == "cat /proc/sys/kernel/random/boot_id":
     state = Path(os.environ["FAKE_STATE"])
     count = int(state.read_text()) if state.exists() else 0
@@ -197,6 +211,8 @@ elif "base64 -d" in cmd:
             sleep.chmod(0o755)
             output = root / "report.md"
             env = dict(os.environ, BCVK=str(bcvk), FAKE_MODE=mode,
+                       VM_SSH_TIMEOUT="0.2" if mode == "ssh-hangs" else "10",
+                       VM_CLEANUP_TIMEOUT="0.2",
                        FAKE_STATE=str(root / "state"), PATH=f"{root}:{os.environ['PATH']}")
             result = subprocess.run(["bash", str(TESTS / "transient-etc-vm-test.sh"),
                                      "fake:transient", str(output)], env=env,
@@ -219,6 +235,21 @@ elif "base64 -d" in cmd:
         result, text, _ = self.run_fake_vm("lost-ssh")
         self.assertEqual(result.returncode, 255, result.stderr)
         self.assertNotIn("Acceptance passed", text)
+
+    def test_hung_ssh_fails_without_hanging_cleanup(self):
+        result, text, _ = self.run_fake_vm("ssh-hangs")
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertIn("Acceptance exit status: 124", text)
+
+    def test_hung_diagnostics_are_best_effort(self):
+        result, text, _ = self.run_fake_vm("diagnostics-hang")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Acceptance exit status: 0", text)
+
+    def test_hung_removal_fails_acceptance(self):
+        result, text, _ = self.run_fake_vm("cleanup-hangs")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("Acceptance exit status: 1", text)
 
 
 if __name__ == "__main__":
