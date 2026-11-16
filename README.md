@@ -24,7 +24,8 @@ and images are not yet signed.
   `@projectbluefin/common` is in the build context but not overlaid.
 - `tmux` and `gum` (used by the ujust recipes); `podman.socket` enabled.
 - `sshd.service` enabled, because bcvk's VM install waits for SSH. That is a
-  real exposure; firewalld and SSH authentication still govern it.
+  real exposure, so firewalld governs it and sshd accepts keys only: password
+  and keyboard-interactive login are off, and root may log in only with a key.
 - `bootc install` defaults to a btrfs root.
 - Container short names are enforcing, with no search registries.
 - firewalld enabled, and the `FedoraWorkstation` zone without Fedora's
@@ -67,6 +68,7 @@ and bump it in its own pull request. Configuration hooks:
 | `/etc/rancher/k3s/config.yaml.d/*.yaml` | k3s settings; use `kubelet-arg+:` to add kubelet reservations without replacing the base list |
 | `/etc/default/k3s-preflight` | `K3S_PREFLIGHT_REQUIRE_KVM=1` on KubeVirt hosts |
 | `/etc/modules-load.d/`, `/etc/modprobe.d/` | Hardware modules and options, e.g. `kvm_intel nested=1` |
+| `/etc/ssh/sshd_config.d/` | sshd settings; a file sorting before `40-atomic-linux.conf` overrides the key-only defaults |
 
 A derived image that installs packages should run `dnf5 clean all` (or reuse
 this repository's `build/clean-stage.sh` pattern) so its own
