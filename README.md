@@ -37,6 +37,30 @@ and images are not yet signed.
   modules and sysctls k3s needs only when k3s is enabled, so a desktop that
   never runs k3s is unaffected. `/usr/libexec/k3s-validate` is a bounded
   acceptance check for test VMs.
+- `runner.slice`, a memory- and CPU-capped slice for CI runners and job
+  VMs, unused until a unit opts in; see
+  [Runner slice](#runner-slice).
+
+## Runner slice
+
+`runner.slice` keeps CI runner workloads and their job VMs from starving the
+host: a runaway job is throttled at `MemoryHigh=75%` of physical RAM and
+OOM-killed inside the slice at `MemoryMax=85%`, rather than pushing sshd and
+the other host services into the kernel's global OOM killer. `CPUWeight=50`,
+half the default weight of its sibling slices, lowers its CPU share under
+contention. Nothing runs in it until a unit opts in with
+`Slice=runner.slice`, so a host without runners is unaffected.
+
+The limits live in `/usr/lib/systemd/system/runner.slice.d/50-limits.conf`.
+Override them with a later-sorting drop-in, in a derived image or on the
+host, and check the result with `systemctl show runner.slice -p MemoryMax`:
+
+```ini
+# /etc/systemd/system/runner.slice.d/60-local.conf
+[Slice]
+MemoryHigh=24G
+MemoryMax=28G
+```
 
 ## Deriving an image
 
@@ -66,6 +90,7 @@ and bump it in its own pull request. Configuration hooks:
 | `/usr/libexec/atomic-linux/write-image-info` | Record the derived image's name and update origin in `image-info.json` |
 | `/etc/rancher/k3s/config.yaml.d/*.yaml` | k3s settings; use `kubelet-arg+:` to add kubelet reservations without replacing the base list |
 | `/etc/default/k3s-preflight` | `K3S_PREFLIGHT_REQUIRE_KVM=1` on KubeVirt hosts |
+| `/etc/systemd/system/runner.slice.d/*.conf` | Runner memory and CPU limits; see [Runner slice](#runner-slice) |
 | `/etc/modules-load.d/`, `/etc/modprobe.d/` | Hardware modules and options, e.g. `kvm_intel nested=1` |
 
 A derived image that installs packages should run `dnf5 clean all` (or reuse
