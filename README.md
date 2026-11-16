@@ -23,6 +23,15 @@ and images are not yet signed.
   example recipes, and example Brewfiles and Flatpak preinstall files.
   `@projectbluefin/common` is in the build context but not overlaid.
 - `tmux` and `gum` (used by the ujust recipes); `podman.socket` enabled.
+- Host services: `tailscaled` enabled but not logged in (`tailscale up`, tags
+  and keys are left to the machine's owner), toolbox, chronyd, and `git`,
+  `just`, `jq` and `curl`. No Node.js. `restic-backup.timer` runs a daily
+  `restic backup` once both `/etc/restic-backup/env` (an `EnvironmentFile`
+  with `RESTIC_REPOSITORY`, `RESTIC_PASSWORD_FILE` and any backend
+  credentials) and `/etc/restic-backup/paths` (one path per line) exist;
+  until then it does nothing. It uses `--one-file-system`, so list each
+  mount or btrfs subvolume, and `/var/home` rather than the `/home` symlink.
+  Pruning old snapshots is left to the owner.
 - `sshd.service` enabled, because bcvk's VM install waits for SSH. That is a
   real exposure; firewalld and SSH authentication still govern it.
 - `bootc install` defaults to a btrfs root.
