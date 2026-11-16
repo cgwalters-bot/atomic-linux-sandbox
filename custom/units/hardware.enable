@@ -1,0 +1,6 @@
+# Firmware and server hardware support; see custom/packages/hardware.txt.
+NetworkManager.service
+# Refreshes LVFS metadata; it never applies an update by itself.
+fwupd-refresh.timer
+# Logs SMART health changes to the journal.
+smartd.service
