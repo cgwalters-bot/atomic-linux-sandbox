@@ -192,40 +192,13 @@ reported only after cleanup. Killing an install/client may leave guest-side
 work or a VM behind; cleanup is attempted even after a failed install, and
 cleanup failures are reported rather than claimed as removal.
 
-Validation status: this continues [draft #19](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/19)
-at `a8e823a12c17620c3ba98d36a23dfa5748a12a95`, which incorporates #18 and
-[#17](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/17).
-Synthetic parser and transport tests do not boot the image. No transient VM
-findings or real boot/report artifact are available from this run. `/dev/kvm`
-exists but the read/write access check fails; disk preflight found sufficient
-space, but bcvk and virsh
-are absent and a small Podman container cannot start (crun sd-bus error).
-Neither the multi-GB build nor VM recipe was run after this failed preflight.
-`just lint` retains the 21 collector tests and adds mocked acceptance-driver
-regressions for hung/unreachable guests, install/reboot/diagnostic timeouts,
-failed collectors and cleanup, original exit status and failed-VM retention.
-`just fmt-check` and `git diff --check` pass. `just hadolint` fails before
-linting because of the same crun sd-bus error (an earlier attempt also failed
-joining Podman's user namespace); `just lint-workflows`
-cannot find the required sibling actions checkout. Actual transient build,
-boot/mount-reset assertions, service exercises and live rename/create-delete/
-failed-attempt observations remain unverified. There are no measured service
-or path identities or audit-loss counts to report from this run.
-
-The required separate, non-gating workflow and
-stale action-pin fixes remain undelivered: this run's handback policy
-protects all `.github/` paths and provides no workflow-edit exception.
-This is a tracker dispatch/apply controller dependency, not a request to relax
-policy. #15 closed unmerged; replacement
-[#20](https://github.com/cgwalters-forge/atomic-linux-sandbox/pull/20) remains
-open. Its latest lint job (129580620753, run 42740670388) still reports
-`ref-version-mismatch` for setup-runner in build.yml and composefs.yml: its
-pin `460aab74615e911b69d2c1dc86bfb08442b15188` is annotated `v1`, while the
-job resolved that tag to `6453818f6279`. No lint suppression or permission
-change is proposed here. Existing
-ordinary-image and composefs CI successes do not validate this variant.
-Do not infer machine-id or installer configuration behavior until an
-installed transient VM has been measured and its actual report linked here.
+Status: the variant and this installed-VM test exist, and `just lint` runs
+the collector's synthetic tests, but nothing has booted the variant yet.
+Producing a report needs a separate, non-gating workflow that builds the
+variant and runs this test on a hosted runner with KVM; it has not been added.
+Ordinary-image and composefs CI do not exercise this variant. Draw no
+conclusions about machine-id or installer configuration behavior until a
+measured report is linked here.
 
 ## Build and test
 
