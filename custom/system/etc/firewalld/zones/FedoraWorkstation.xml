@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <zone>
   <short>Fedora Workstation</short>
-  <description>Desktop LAN zone without the upstream broad high-port exposure.</description>
-  <service name="dhcpv6-client"/>
-  <service name="samba-client"/>
+  <description>Default-deny inbound apart from SSH and the tailscale WireGuard port; other services must not be reachable from the LAN.</description>
   <service name="ssh"/>
+  <service name="tailscale"/>
   <forward/>
 </zone>
