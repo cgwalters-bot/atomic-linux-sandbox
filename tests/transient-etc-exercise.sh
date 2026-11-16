@@ -29,8 +29,12 @@ wait_for() {
 }
 
 # One unit per call: is-active succeeds if any of several units is active.
-step 'graphical.target reached' wait_for systemctl is-active --quiet graphical.target
-step 'gdm active' wait_for systemctl is-active --quiet gdm.service
+default_target=$(systemctl get-default)
+step "${default_target} reached" wait_for systemctl is-active --quiet "${default_target}"
+# Only the desktop variant, which boots to graphical.target, has a display manager.
+if [[ "${default_target}" == graphical.target ]]; then
+	step 'gdm active' wait_for systemctl is-active --quiet gdm.service
+fi
 step 'NetworkManager: add a connection' timeout "${STEP_TIMEOUT_SECS}" nmcli connection add type dummy ifname atltest0 con-name "${CONNECTION}" \
 	ipv4.method manual ipv4.addresses 192.0.2.1/24
 step 'NetworkManager: remove it' timeout "${STEP_TIMEOUT_SECS}" nmcli connection delete "${CONNECTION}"

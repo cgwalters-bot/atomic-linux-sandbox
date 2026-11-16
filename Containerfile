@@ -1,4 +1,5 @@
-# atomic-linux: a generic Fedora Atomic (bootc) desktop/host base image.
+# atomic-linux: a generic Fedora bootc host image, as a shared headless base
+# plus a server and a desktop variant (ARG VARIANT).
 #
 # It is meant to be derived from, not edited: a downstream repository holds
 # a small Containerfile starting with
@@ -22,28 +23,15 @@ COPY custom /custom
 COPY --from=common /system_files /oci/common
 COPY --from=brew /system_files /oci/brew
 
-# Base image: Fedora's official Silverblue (GNOME) bootc image. Alternatives
-# with the same layout: quay.io/fedora-ostree-desktops/base-main (no desktop)
-# or quay.io/centos-bootc/centos-bootc:stream10.
-FROM quay.io/fedora-ostree-desktops/silverblue:44@sha256:6f18b1c32e1904c7019807ffbeb7cd066683d72b0504d046abcb07cbdf4c9fab
+# The shared base: headless Fedora bootc, with what every variant carries.
+# Alternative with the same layout: quay.io/centos-bootc/centos-bootc:stream10.
+FROM quay.io/fedora/fedora-bootc:45@sha256:1989dd9223dc2ef03e3be158165be13e55b5571c62e9f3c88992950cf355416d AS base
 
-# Image identity, recorded in /usr/share/ublue-os/image-info.json. Derived
-# images re-run /usr/libexec/atomic-linux/write-image-info with their own.
-ARG IMAGE_NAME="atomic-linux"
-ARG IMAGE_VENDOR="cgwalters-forge"
-ARG IMAGE_REGISTRY="ghcr.io/cgwalters-forge"
-ARG UBLUE_IMAGE_TAG="stable"
-ARG BASE_IMAGE_NAME="silverblue"
-ARG FEDORA_MAJOR_VERSION="44"
-
-RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
-    --mount=type=tmpfs,dst=/boot \
-    --mount=type=tmpfs,dst=/tmp \
-    install -D -m 0755 /ctx/build/00-image-info.sh /usr/libexec/atomic-linux/write-image-info \
-    && /usr/libexec/atomic-linux/write-image-info
-
-# Keep the dnf cache during the build; clean-stage.sh restores the default.
-RUN cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.tmp \
+# The build's own tools (dnf5 config-manager and versionlock, rsync). Keep the
+# dnf cache during the build; clean-stage.sh restores the default.
+RUN --mount=type=cache,dst=/var/cache/libdnf5 \
+    dnf5 install -y dnf5-plugins rsync \
+    && cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.tmp \
     && mv /etc/dnf/dnf.conf.tmp /etc/dnf/dnf.conf \
     && dnf5 config-manager setopt keepcache=1 install_weak_deps=0
 
@@ -73,6 +61,33 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/boot \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/build/20-k3s.sh
+
+# The published image: the base plus one variant, server (headless) or
+# desktop (GNOME); see build/40-variant.sh.
+FROM base
+
+ARG VARIANT="desktop"
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    VARIANT="${VARIANT}" bash /ctx/build/40-variant.sh
+
+# Image identity, recorded in /usr/share/ublue-os/image-info.json. Derived
+# images re-run /usr/libexec/atomic-linux/write-image-info with their own.
+# It comes after the base so that the base depends on neither tag nor variant.
+ARG IMAGE_NAME="atomic-linux"
+ARG IMAGE_VENDOR="cgwalters-forge"
+ARG IMAGE_REGISTRY="ghcr.io/cgwalters-forge"
+ARG UBLUE_IMAGE_TAG="stable"
+ARG BASE_IMAGE_NAME="fedora-bootc"
+ARG FEDORA_MAJOR_VERSION="45"
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    install -D -m 0755 /ctx/build/00-image-info.sh /usr/libexec/atomic-linux/write-image-info \
+    && /usr/libexec/atomic-linux/write-image-info
 
 # /run is deliberately not a tmpfs here: clean-stage.sh must remove
 # image-layer files such as /run/dnf so bootc lint's nonempty-run-tmp check

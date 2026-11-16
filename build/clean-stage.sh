@@ -15,8 +15,11 @@ dnf5 config-manager setopt keepcache=0
 dnf5 config-manager unsetopt install_weak_deps
 dnf5 versionlock clear
 
-# This comes last because we can't *ever* afford to ship fedora flatpaks on the image
-systemctl disable flatpak-add-fedora-repos.service
+# This comes last because we can't *ever* afford to ship fedora flatpaks on the image.
+# The mask also covers a variant or derived image that installs flatpak later.
+if [[ -e "${CLEAN_ROOT}/usr/lib/systemd/system/flatpak-add-fedora-repos.service" ]]; then
+	systemctl disable flatpak-add-fedora-repos.service
+fi
 systemctl mask flatpak-add-fedora-repos.service
 rm -f "${CLEAN_ROOT}/usr/lib/systemd/system/flatpak-add-fedora-repos.service"
 

@@ -13,7 +13,7 @@
 #   IMAGE_VENDOR          owner (required)
 #   IMAGE_REGISTRY        registry and namespace (default ghcr.io/IMAGE_VENDOR)
 #   UBLUE_IMAGE_TAG       stream tag (default stable)
-#   BASE_IMAGE_NAME       base image name (default silverblue)
+#   BASE_IMAGE_NAME       base image name (default fedora-bootc)
 #   FEDORA_MAJOR_VERSION  Fedora release (default from /usr/lib/os-release)
 
 set -euo pipefail
@@ -22,7 +22,7 @@ set -euo pipefail
 : "${IMAGE_VENDOR:?IMAGE_VENDOR must be set}"
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/${IMAGE_VENDOR}}"
 UBLUE_IMAGE_TAG="${UBLUE_IMAGE_TAG:-stable}"
-BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-silverblue}"
+BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-fedora-bootc}"
 if [[ -z "${FEDORA_MAJOR_VERSION:-}" ]]; then
 	# shellcheck source=/dev/null
 	FEDORA_MAJOR_VERSION=$(. /usr/lib/os-release && echo "${VERSION_ID}")

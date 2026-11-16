@@ -10,7 +10,8 @@ and [`switch`](https://bootc.dev/bootc/man/bootc-switch.8.html).
 
 Use `IMAGE` below for the image you install: usually a derived image (see
 "Deriving an image" in the [README](../README.md)), or
-`ghcr.io/cgwalters-forge/atomic-linux:stable` to try the base. Images are
+`ghcr.io/cgwalters-forge/atomic-linux:stable` to try the desktop variant
+(the server variant is not published yet). Images are
 not signed yet. This guide covers the default ostree backend, not the
 composefs variant.
 

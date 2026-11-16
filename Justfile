@@ -1,6 +1,12 @@
 export IMAGE_NAME := env("IMAGE_NAME", "atomic-linux")
 export IMAGE_VENDOR := env("IMAGE_VENDOR", "cgwalters-forge")
 export DEFAULT_TAG := env("DEFAULT_TAG", "stable")
+
+# The variant built on the shared base: server (headless) or desktop (GNOME).
+# Build and test recipes for one tag must use the same VARIANT. The default is
+# desktop because CI builds the default as `stable`, which has been a desktop.
+
+export VARIANT := env("VARIANT", "desktop")
 export PODMAN := env("PODMAN", "podman")
 export BCVK := env("BCVK", "bcvk")
 export BCVK_CONNECTION := env("BCVK_CONNECTION", "qemu:///session")
@@ -28,7 +34,7 @@ k3s_vm_name := IMAGE_NAME + "-k3s"
 default:
     @just --list
 
-# Build the image into rootless containers-storage as IMAGE_NAME:tag.
+# Build the VARIANT image into rootless containers-storage as IMAGE_NAME:tag.
 [group('Image')]
 build tag=DEFAULT_TAG:
     #!/usr/bin/env bash
@@ -45,12 +51,13 @@ build tag=DEFAULT_TAG:
         --build-arg "IMAGE_NAME=${IMAGE_NAME}" \
         --build-arg "IMAGE_VENDOR=${IMAGE_VENDOR}" \
         --build-arg "UBLUE_IMAGE_TAG={{ tag }}" \
+        --build-arg "VARIANT=${VARIANT}" \
         --build-arg "BOOTC_SOURCE=${BOOTC_SOURCE}" \
         --build-arg "STORAGE_BACKEND=${STORAGE_BACKEND}" \
         --build-arg "ETC_MODE=${ETC_MODE}" \
         --label "org.opencontainers.image.title=${IMAGE_NAME}" \
         --label "org.opencontainers.image.version=${version}" \
-        --label "org.opencontainers.image.description=Generic Fedora Atomic bootc desktop/host base image" \
+        --label "org.opencontainers.image.description=Generic Fedora bootc host image, ${VARIANT} variant" \
         --label "org.opencontainers.image.source=${source_url}" \
         --label "org.opencontainers.image.url=${source_url}" \
         --label "org.opencontainers.image.revision=${revision}" \
@@ -106,7 +113,7 @@ image-test tag=DEFAULT_TAG:
     failed=()
     for test in "${tests[@]}"; do
         echo "== ${test}"
-        if ! ${PODMAN} run --rm -i --timeout "${IMAGE_TEST_TIMEOUT:-120}" --network=none --security-opt label=disable \
+        if ! ${PODMAN} run --rm -i --timeout "${IMAGE_TEST_TIMEOUT:-120}" --network=none --security-opt label=disable --env VARIANT \
             -v "$PWD/custom:/ctx/custom:ro" "{{ local_image }}:{{ tag }}" bash -s < "${test}"; then
             failed+=("${test}")
         fi
@@ -127,7 +134,7 @@ ephemeral-smoke tag=DEFAULT_TAG:
     #!/usr/bin/env bash
     set -euo pipefail
     script=$(base64 -w0 tests/ephemeral-smoke.sh)
-    {{ BCVK }} ephemeral run-ssh "{{ local_image }}:{{ tag }}" -- "echo ${script} | base64 -d | sudo env EXPECT_IMAGE_NAME={{ IMAGE_NAME }} EXPECT_TAG={{ tag }} bash"
+    {{ BCVK }} ephemeral run-ssh "{{ local_image }}:{{ tag }}" -- "echo ${script} | base64 -d | sudo env EXPECT_IMAGE_NAME={{ IMAGE_NAME }} EXPECT_TAG={{ tag }} EXPECT_VARIANT={{ VARIANT }} bash"
 
 # Write a reusable QCOW2 disk from containers-storage.
 [group('Virtual Machine')]
@@ -141,10 +148,10 @@ qcow2 tag=DEFAULT_TAG:
 vm-create tag=DEFAULT_TAG:
     {{ BCVK }} libvirt --connect {{ BCVK_CONNECTION }} run --replace --name {{ vm_name }} --target-transport containers-storage --filesystem btrfs --disk-size 20G --detach --ssh-wait "{{ local_image }}:{{ tag }}"
 
-# Check the persistent VM: identity, btrfs root, GDM, networking.
+# Check the persistent VM: identity, btrfs root, target (and GDM on desktop), networking.
 [group('Virtual Machine')]
 vm-test tag=DEFAULT_TAG:
-    {{ BCVK }} libvirt --connect {{ BCVK_CONNECTION }} ssh {{ vm_name }} 'set -eu; test "$(jq -r .\"image-name\" /usr/share/ublue-os/image-info.json)" = {{ IMAGE_NAME }}; bootc status --format=json | jq -e ".status.booted.image.image.image == \"{{ local_image }}:{{ tag }}\""; test "$(findmnt -no FSTYPE /sysroot)" = btrfs; systemctl is-active NetworkManager; test "$(systemctl get-default)" = graphical.target; systemctl is-active gdm; getent hosts fedoraproject.org; curl --silent --show-error --head --output /dev/null https://fedoraproject.org'
+    {{ BCVK }} libvirt --connect {{ BCVK_CONNECTION }} ssh {{ vm_name }} 'set -eu; test "$(jq -r .\"image-name\" /usr/share/ublue-os/image-info.json)" = {{ IMAGE_NAME }}; bootc status --format=json | jq -e ".status.booted.image.image.image == \"{{ local_image }}:{{ tag }}\""; test "$(findmnt -no FSTYPE /sysroot)" = btrfs; systemctl is-active NetworkManager; {{ if VARIANT == "desktop" { "test \"$(systemctl get-default)\" = graphical.target; systemctl is-active gdm" } else { "test \"$(systemctl get-default)\" = multi-user.target" } }}; getent hosts fedoraproject.org; curl --silent --show-error --head --output /dev/null https://fedoraproject.org'
 
 # Remove the persistent VM.
 [group('Virtual Machine')]

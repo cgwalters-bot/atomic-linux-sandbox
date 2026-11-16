@@ -1,0 +1,3 @@
+# Units the desktop variant enables; the default target is set by
+# build/40-variant.sh.
+gdm.service

@@ -2,9 +2,11 @@
 
 # atomic-linux
 
-A generic [bootc](https://bootc-dev.github.io/) desktop and host image built
-on Fedora Silverblue, published as `ghcr.io/cgwalters-forge/atomic-linux`.
-It is a base to derive from, not a finished personal system: what is specific
+A generic [bootc](https://bootc-dev.github.io/) host image built on
+[Fedora bootc](https://quay.io/repository/fedora/fedora-bootc), published as
+`ghcr.io/cgwalters-forge/atomic-linux`. It is one image family: a shared
+headless base plus two thin variants, **desktop** (GNOME, the default) and
+**server** (headless). It is a base to derive from, not a finished personal system: what is specific
 to one machine or person (users, SSH keys, network and VPN setup, hardware
 tuning, extra packages) belongs in a small downstream image that starts
 `FROM` this one.
@@ -18,7 +20,9 @@ and images are not yet signed.
 
 ## What is in the image
 
-- Fedora Silverblue 44 (GNOME), digest-pinned, with Universal Blue's
+The shared base, in both variants:
+
+- Fedora bootc 45, digest-pinned, with Universal Blue's
   Homebrew integration (`brew-setup`, update and upgrade timers), `ujust`
   example recipes, and example Brewfiles and Flatpak preinstall files.
   `@projectbluefin/common` is in the build context but not overlaid.
@@ -49,7 +53,8 @@ and images are not yet signed.
   ([docs/updates.md](docs/updates.md)).
 - `bootc install` defaults to a btrfs root.
 - Container short names are enforcing, with no search registries.
-- firewalld enabled, and the default `FedoraWorkstation` zone denies
+- firewalld enabled, and the default `FedoraWorkstation` zone (selected by
+  the build, since fedora-bootc defaults to `public`) denies
   everything inbound apart from `ssh` and `tailscale` (UDP 41641, for direct
   tailnet connections), replacing Fedora's 1025-65535 tcp/udp opening.
   `dhcpv6-client` and `samba-client` are gone too, so stateful DHCPv6 and
@@ -58,12 +63,22 @@ and images are not yet signed.
   configuration (SELinux, secrets encryption, Flannel VXLAN, Traefik and
   ServiceLB off, NodePorts on loopback only, a `k3s` firewalld zone trusting
   only the pod and service CIDRs) and a preflight unit that loads the kernel
-  modules and sysctls k3s needs only when k3s is enabled, so a desktop that
+  modules and sysctls k3s needs only when k3s is enabled, so a host that
   never runs k3s is unaffected. `/usr/libexec/k3s-validate` is a bounded
   acceptance check for test VMs.
 - `runner.slice`, a memory- and CPU-capped slice for CI runners and job
   VMs, unused until a unit opts in; see
   [Runner slice](#runner-slice).
+
+The variants, chosen at build time with `VARIANT` (`build/40-variant.sh`):
+
+- **server** boots to `multi-user.target` and adds nothing to the base.
+- **desktop** adds a GNOME session (`custom/variants/desktop/`) and boots to
+  GDM on `graphical.target`.
+
+Each variant's packages, files and units are drop-ins under
+`custom/variants/<variant>/`, laid out like the base's `custom/packages`,
+`custom/system` and `custom/units`.
 
 ## Runner slice
 
@@ -135,8 +150,8 @@ backend by itself, with GRUB and BLS entries; no `--composefs-backend` flag is
 needed. The root is a read-only, fs-verity-checked EROFS image, and `/etc` and
 `/var` are per-deployment and shared state directories under `/sysroot/state`.
 
-It needs bootc 1.17 or newer, which Fedora 44 has only in updates-testing so
-far; the build fails early with older bootc. `source=copr` takes upstream's
+It needs bootc 1.17 or newer, which the recipe takes from Fedora's
+updates-testing by default; the build fails early with older bootc. `source=copr` takes upstream's
 main branch from the `rhcontainerbot/bootc` COPR instead:
 
 ```sh
@@ -192,8 +207,8 @@ exercises ostree-prepare-root. Only this variant includes the early audit
 watch, `audit=1` and an audit-rules drop-in. It is measurement instrumentation,
 not a security enforcement boundary; the test intentionally changes `/etc`.
 
-The exercised scope is GDM/graphical.target activation (not interactive
-login), NetworkManager connection add/delete, a runtime firewalld port
+The exercised scope is reaching the default target (and GDM activation on
+the desktop variant, not interactive login), NetworkManager connection add/delete, a runtime firewalld port
 change/revert, podman running a small remote image, timezone and hostname
 changes, and enabling k3s through its existing preflight then running
 `k3s-validate`. Each service step is bounded; failures remain visible findings.
@@ -253,8 +268,10 @@ measured report is linked here.
 ## Build and test
 
 ```sh
-just build          # podman build into containers-storage as atomic-linux:stable
+just build          # the desktop variant, into containers-storage as atomic-linux:stable
 just image-test     # run tests/image/*.sh in the built image with podman run
+VARIANT=server just build server          # the server variant, as atomic-linux:server
+VARIANT=server just image-test server     # test recipes take the same VARIANT
 just lint           # shellcheck over the scripts
 just hadolint       # Containerfile lint, in a container
 just fmt-check      # Justfile formatting
@@ -284,13 +301,18 @@ kubevirt-test`) needs nested KVM inside the test VM and is not run in CI.
 
 A push to `main` pushes the image to `ghcr.io/cgwalters-forge/atomic-linux`
 as `git-<sha>` only. Once both VM jobs pass, the `promote` job retags that
-digest as the version label (`44.YYYYMMDD`) and `stable`, after checking
+digest as the version label (`45.YYYYMMDD`) and `stable`, after checking
 that its config is the image the VM jobs booted; nothing is rebuilt. A
 failed VM test leaves `stable` where it was, and `promote` skips a build
 that is no longer the head of `main`. The workflow's
 `GITHUB_TOKEN` (`packages: write`) is the only credential, and the job
 summaries print the digest. Dependabot proposes digest bumps for the `FROM`
 lines and action pins.
+
+CI builds, tests and publishes only the default desktop variant so far, so
+`stable` and the version tags stay a GNOME desktop. The server variant is not
+published yet; building it in CI, with its own tags and promotion, is still
+to do.
 
 Not yet done: signing. The plan is a cosign key pair, not keyless signing,
 because containers/image (and so bootc) cannot match keyless signatures to a
