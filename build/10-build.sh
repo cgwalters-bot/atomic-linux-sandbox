@@ -7,14 +7,14 @@ set -euo pipefail
 ###############################################################################
 # This script follows the @ublue-os/bluefin pattern for build scripts.
 # It uses set -euo pipefail for strict error handling.
+# It builds the shared base; 40-variant.sh adds a variant on top.
 ###############################################################################
 
 # Source helper functions
 # shellcheck source=/dev/null
 source /ctx/build/copr-helpers.sh
-
-# Enable nullglob for all glob operations to prevent failures on empty matches
-shopt -s nullglob
+# shellcheck source=build/drop-ins.sh
+source /ctx/build/drop-ins.sh
 
 echo "::group:: Overlay Brew Integration Files"
 
@@ -23,10 +23,18 @@ rsync -rvK /ctx/oci/brew/ /
 
 echo "::endgroup::"
 
-echo "::group:: Copy Custom Files"
+# custom/packages/*.txt, custom/system/ and custom/units/*.enable.
+apply_drop_ins /ctx/custom
 
-# Overlay image-owned system configuration before enabling services.
-rsync -rvK /ctx/custom/system/ /
+# Example using COPR with isolated pattern:
+# copr_install_isolated "ublue-os/staging" package-name
+
+# Example: systemctl mask unwanted-service
+
+echo "::group:: Copy User-Facing Files"
+
+# Enable nullglob for all glob operations to prevent failures on empty matches
+shopt -s nullglob
 
 # Copy Brewfiles to standard location
 mkdir -p /usr/share/ublue-os/homebrew/
@@ -40,41 +48,9 @@ find /ctx/custom/ujust -iname '*.just' -exec printf "\n\n" \; -exec cat {} \; >>
 mkdir -p /usr/share/flatpak/preinstall.d/
 cp /ctx/custom/flatpaks/*.preinstall /usr/share/flatpak/preinstall.d/
 
-echo "::endgroup::"
-
-# Print the entries of the list files given: one per line, # starts a comment.
-read_list() {
-	(($#)) || return 0
-	sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$@"
-}
-
-echo "::group:: Install Packages"
-
-# One package name per line in custom/packages/*.txt.
-packages_out=$(read_list /ctx/custom/packages/*.txt)
-mapfile -t packages <<<"${packages_out}"
-if [[ -n "${packages_out}" ]]; then
-	dnf5 install -y "${packages[@]}"
-fi
-
-# Example using COPR with isolated pattern:
-# copr_install_isolated "ublue-os/staging" package-name
-
-echo "::endgroup::"
-
-echo "::group:: System Configuration"
-
-# One unit name per line in custom/units/*.enable.
-units_out=$(read_list /ctx/custom/units/*.enable)
-mapfile -t units <<<"${units_out}"
-if [[ -n "${units_out}" ]]; then
-	systemctl enable "${units[@]}"
-fi
-# Example: systemctl mask unwanted-service
-
-echo "::endgroup::"
-
 # Restore default glob behavior
 shopt -u nullglob
+
+echo "::endgroup::"
 
 echo "Custom build complete!"

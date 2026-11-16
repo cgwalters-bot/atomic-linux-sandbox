@@ -1,0 +1,32 @@
+# The desktop variant's GNOME session: the mandatory packages of Fedora's
+# gnome-desktop group without yelp, plus the backgrounds, GNOME's portal
+# backend and user directories.
+dconf
+gdm
+gnome-backgrounds
+gnome-control-center
+gnome-initial-setup
+gnome-session-wayland-session
+gnome-settings-daemon
+gnome-shell
+gnome-software
+gnome-text-editor
+nautilus
+polkit
+ptyxis
+xdg-desktop-portal-gnome
+xdg-user-dirs-gtk
+# What a Silverblue desktop following this image already relies on; the
+# build installs without weak deps, so none of it arrives by itself.
+# tests/image/variant.sh checks these stay installed.
+bluez
+cups
+default-fonts-core
+flatpak
+gnome-keyring
+gnome-keyring-pam
+pipewire
+pipewire-pulseaudio
+power-profiles-daemon
+wireplumber
+wpa_supplicant

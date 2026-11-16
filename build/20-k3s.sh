@@ -43,3 +43,6 @@ dnf5 install -y "${workdir}/${K3S_SELINUX_RPM}"
 install -d /var/lib/rancher/k3s
 restorecon -RFv /usr/bin/k3s /usr/lib/systemd/system/k3s.service /var/lib/rancher/k3s
 systemctl enable firewalld.service
+# fedora-bootc defaults to the public zone; keep Silverblue's default, which
+# custom/system/etc/firewalld/zones/FedoraWorkstation.xml locks down.
+firewall-offline-cmd --set-default-zone=FedoraWorkstation

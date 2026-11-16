@@ -33,7 +33,10 @@ wait_for_coredns() {
 
 systemctl is-active --quiet k3s.service
 systemctl is-active --quiet firewalld.service
-systemctl is-active --quiet gdm.service
+# The desktop variant's display manager must survive k3s; the server has none.
+if [[ "$(systemctl get-default)" == graphical.target ]]; then
+    systemctl is-active --quiet gdm.service
+fi
 systemctl is-active --quiet NetworkManager.service
 test -f /sys/fs/cgroup/cgroup.controllers
 if [[ "${K3S_VALIDATE_REQUIRE_KVM:-0}" == 1 ]]; then

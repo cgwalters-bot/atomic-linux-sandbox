@@ -8,7 +8,8 @@ ssh-keygen -q -t ed25519 -N '' -f "${keydir}/host_key"
 config=$(sshd -T -h "${keydir}/host_key")
 for expected in 'passwordauthentication no' 'kbdinteractiveauthentication no' \
 	'permitrootlogin prohibit-password' 'pubkeyauthentication yes'; do
-	if ! grep -qxF "${expected}" <<<"${config}"; then
+	# Fedora 45's OpenSSH prints keywords in mixed case, older ones lowercase.
+	if ! grep -qixF "${expected}" <<<"${config}"; then
 		echo "error: sshd -T lacks '${expected}'" >&2
 		exit 1
 	fi
