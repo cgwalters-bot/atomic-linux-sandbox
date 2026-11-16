@@ -74,7 +74,7 @@ build-transient-etc tag="transient-etc":
 # ShellCheck over build scripts, host helpers and tests, plus audit parser tests.
 [group('Quality')]
 lint:
-    shellcheck build/*.sh custom/system/usr/libexec/k3s-* tests/*.sh tests/kubevirt/*.sh
+    shellcheck build/*.sh custom/system/usr/libexec/k3s-* tests/*.sh tests/image/*.sh tests/kubevirt/*.sh
     python3 -B -m unittest discover -s tests -p 'test_transient_etc*.py'
 
 # Containerfile lint (pulls the hadolint image).
@@ -91,6 +91,30 @@ fmt-check:
 [group('Quality')]
 lint-workflows:
     {{ just_executable() }} --justfile "{{ forge_actions }}/lint/Justfile" --working-directory . check
+
+# Run each tests/image/*.sh offline in the built image, IMAGE_TEST_TIMEOUT (120) seconds each.
+[group('Quality')]
+image-test tag=DEFAULT_TAG:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    tests=(tests/image/*.sh)
+    if ((${#tests[@]} == 0)); then
+        echo "error: no tests in tests/image" >&2
+        exit 1
+    fi
+    failed=()
+    for test in "${tests[@]}"; do
+        echo "== ${test}"
+        if ! ${PODMAN} run --rm -i --timeout "${IMAGE_TEST_TIMEOUT:-120}" --network=none --security-opt label=disable \
+            -v "$PWD/custom:/ctx/custom:ro" "{{ local_image }}:{{ tag }}" bash -s < "${test}"; then
+            failed+=("${test}")
+        fi
+    done
+    if ((${#failed[@]})); then
+        echo "error: failed: ${failed[*]}" >&2
+        exit 1
+    fi
 
 # Remove generated local artifacts.
 [group('Utility')]

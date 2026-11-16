@@ -1,0 +1,4 @@
+# Packages installed by build/10-build.sh: one name per line, # comments.
+tmux
+# Used by the default ujust recipes for interactive prompts.
+gum

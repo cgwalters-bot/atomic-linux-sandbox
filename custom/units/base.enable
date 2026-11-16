@@ -1,0 +1,7 @@
+# Units enabled by build/10-build.sh: one name per line, # comments.
+podman.socket
+# bcvk's VM install waits for SSH.
+sshd.service
+brew-setup.service
+brew-update.timer
+brew-upgrade.timer

@@ -11,6 +11,8 @@ CLEAN_ROOT="${CLEAN_ROOT:-/}"
 
 # Revert back to upstream defaults
 dnf5 config-manager setopt keepcache=0
+# The build sets install_weak_deps=0; derived images get Fedora's default.
+dnf5 config-manager unsetopt install_weak_deps
 dnf5 versionlock clear
 
 # This comes last because we can't *ever* afford to ship fedora flatpaks on the image
