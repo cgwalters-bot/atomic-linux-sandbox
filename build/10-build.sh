@@ -42,11 +42,20 @@ cp /ctx/custom/flatpaks/*.preinstall /usr/share/flatpak/preinstall.d/
 
 echo "::endgroup::"
 
+# Print the entries of the list files given: one per line, # starts a comment.
+read_list() {
+	(($#)) || return 0
+	sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$@"
+}
+
 echo "::group:: Install Packages"
 
-# Install the default packages and verify the DNF cache is working.
-# gum is required by the default ujust recipes for interactive prompts.
-dnf5 install -y tmux gum
+# One package name per line in custom/packages/*.txt.
+packages_out=$(read_list /ctx/custom/packages/*.txt)
+mapfile -t packages <<<"${packages_out}"
+if [[ -n "${packages_out}" ]]; then
+	dnf5 install -y "${packages[@]}"
+fi
 
 # Example using COPR with isolated pattern:
 # copr_install_isolated "ublue-os/staging" package-name
@@ -55,12 +64,12 @@ echo "::endgroup::"
 
 echo "::group:: System Configuration"
 
-# Enable/disable systemd services
-systemctl enable podman.socket
-systemctl enable sshd.service
-systemctl enable brew-setup.service
-systemctl enable brew-update.timer
-systemctl enable brew-upgrade.timer
+# One unit name per line in custom/units/*.enable.
+units_out=$(read_list /ctx/custom/units/*.enable)
+mapfile -t units <<<"${units_out}"
+if [[ -n "${units_out}" ]]; then
+	systemctl enable "${units[@]}"
+fi
 # Example: systemctl mask unwanted-service
 
 echo "::endgroup::"

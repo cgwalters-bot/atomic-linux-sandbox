@@ -204,6 +204,7 @@ measured report is linked here.
 
 ```sh
 just build          # podman build into containers-storage as atomic-linux:stable
+just image-test     # run tests/image/*.sh in the built image with podman run
 just lint           # shellcheck over the scripts
 just hadolint       # Containerfile lint, in a container
 just fmt-check      # Justfile formatting
