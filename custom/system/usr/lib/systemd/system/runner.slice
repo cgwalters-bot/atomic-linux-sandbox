@@ -1,0 +1,6 @@
+[Unit]
+Description=CI runner workloads and job VMs
+Documentation=https://github.com/cgwalters-forge/atomic-linux#runner-slice
+
+# Limits are in runner.slice.d/ so a derived image or the host can override
+# them with a later-sorting drop-in in /etc/systemd/system/runner.slice.d/.
