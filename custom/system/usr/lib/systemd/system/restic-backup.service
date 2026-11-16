@@ -1,0 +1,18 @@
+[Unit]
+Description=Back up local paths with restic
+Documentation=man:restic(1)
+# Inert until configured: env sets RESTIC_REPOSITORY plus RESTIC_PASSWORD_FILE
+# (and any backend credentials); paths lists what to back up, one per line.
+ConditionPathExists=/etc/restic-backup/env
+ConditionPathExists=/etc/restic-backup/paths
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/restic-backup/env
+Environment=RESTIC_CACHE_DIR=/var/cache/restic-backup
+CacheDirectory=restic-backup
+ExecStart=/usr/bin/restic backup --one-file-system --exclude-caches --files-from /etc/restic-backup/paths
+Nice=19
+IOSchedulingClass=idle

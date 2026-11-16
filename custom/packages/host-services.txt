@@ -1,0 +1,11 @@
+# Host services. tailscaled is enabled; login, tags and keys stay manual.
+tailscale
+toolbox
+chrony
+# Backups via restic-backup.timer, inert until /etc/restic-backup/ is set up.
+restic
+# CLI tools.
+git
+just
+jq
+curl
