@@ -44,6 +44,9 @@ and images are not yet signed.
   smartmontools (`smartd` enabled; it skips VMs) and fwupd.
   `fwupd-refresh.timer` is enabled, so every host periodically fetches LVFS
   metadata; it never applies firmware by itself.
+- `bootc-fetch-apply-updates.timer` enabled, but stage-only: updates are
+  fetched and staged in the background and never trigger a reboot
+  ([docs/updates.md](docs/updates.md)).
 - `bootc install` defaults to a btrfs root.
 - Container short names are enforcing, with no search registries.
 - firewalld enabled, and the default `FedoraWorkstation` zone denies

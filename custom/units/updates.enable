@@ -1,0 +1,3 @@
+# Fetch and stage updates in the background; the service drop-in removes
+# --apply so this never reboots. See docs/updates.md.
+bootc-fetch-apply-updates.timer
