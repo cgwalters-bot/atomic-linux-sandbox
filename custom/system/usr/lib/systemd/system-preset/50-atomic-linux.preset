@@ -1,0 +1,6 @@
+# sysstat ships for interactive use (custom/packages/debug-tools.txt); its
+# periodic collection into /var/log/sa stays off unless a host enables
+# sysstat.service. Its system-sleep hook still records suspend and resume.
+disable sysstat.service
+disable sysstat-collect.timer
+disable sysstat-summary.timer

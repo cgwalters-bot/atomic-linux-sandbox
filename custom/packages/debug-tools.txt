@@ -1,0 +1,8 @@
+# Host debugging tools, so a headless host can be diagnosed without a
+# rebuild or a toolbox. tests/image/debug-tools.sh runs each one.
+strace
+ltrace
+perf
+bpftrace
+# iostat, mpstat, pidstat and sar.
+sysstat

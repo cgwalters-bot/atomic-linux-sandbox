@@ -32,6 +32,9 @@ and images are not yet signed.
   until then it does nothing. It uses `--one-file-system`, so list each
   mount or btrfs subvolume, and `/var/home` rather than the `/home` symlink.
   Pruning old snapshots is left to the owner.
+- Debug tools for hosts that cannot easily rebuild: `strace`, `ltrace`,
+  `perf`, `bpftrace` and `sysstat`. sysstat's periodic collection into
+  `/var/log/sa` is preset off; `systemctl enable sysstat.service` turns it on.
 - `sshd.service` enabled, because bcvk's VM install waits for SSH. That is a
   real exposure, so firewalld governs it and sshd accepts keys only: password
   and keyboard-interactive login are off, and root may log in only with a key.
