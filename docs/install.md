@@ -167,10 +167,7 @@ signed them before switching to such an image, or the modules will not load.
 
 ## Updates and rollback
 
-`bootc upgrade` (or `ujust update-and-reboot`) stages the newest image for
-the tracked tag, and the next boot uses it; `bootc status` shows the booted,
-staged and rollback deployments. To go back one deployment, run
-`bootc rollback` and reboot, or pick the previous entry in the boot menu (Fedora hides it; hold Shift or
-press Esc during boot). To
-pin a version, `bootc switch` to an `@sha256:` digest; `bootc upgrade` then
-does nothing until you switch again.
+The installed system fetches and stages updates in the background and never
+reboots for them; the next boot uses the staged image. See
+[updates.md](updates.md) for applying, rolling back, pinning and turning
+the timer off.
