@@ -38,6 +38,12 @@ and images are not yet signed.
 - `sshd.service` enabled, because bcvk's VM install waits for SSH. That is a
   real exposure, so firewalld governs it and sshd accepts keys only: password
   and keyboard-interactive login are off, and root may log in only with a key.
+- Hardware support kept independent of the base's desktop package set
+  (`custom/packages/hardware.txt`): linux-firmware plus its CPU microcode,
+  GPU and NIC subpackages, NetworkManager with wifi, tpm2-tools,
+  smartmontools (`smartd` enabled; it skips VMs) and fwupd.
+  `fwupd-refresh.timer` is enabled, so every host periodically fetches LVFS
+  metadata; it never applies firmware by itself.
 - `bootc install` defaults to a btrfs root.
 - Container short names are enforcing, with no search registries.
 - firewalld enabled, and the default `FedoraWorkstation` zone denies

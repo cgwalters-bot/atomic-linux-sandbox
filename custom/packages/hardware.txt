@@ -1,0 +1,26 @@
+# Firmware and server hardware support, guaranteed even on a headless base.
+# This list adds no desktop peripheral stack (bluez, cups,
+# power-profiles-daemon); NVIDIA stays in build/40-nvidia.sh.example.
+linux-firmware
+# The build installs without weak deps, so linux-firmware's split
+# subpackages are named here: CPU microcode, GPUs used for console and
+# compute, and common wired and wifi NICs.
+amd-ucode-firmware
+microcode_ctl
+amd-gpu-firmware
+intel-gpu-firmware
+realtek-firmware
+iwlwifi-dvm-firmware
+iwlwifi-mvm-firmware
+iwlwifi-mld-firmware
+atheros-firmware
+brcmfmac-firmware
+mt7xxx-firmware
+# Firmware updates from LVFS; fwupd-refresh.timer fetches metadata only.
+fwupd
+NetworkManager
+NetworkManager-wifi
+# TPM2 inspection and sealing, e.g. for systemd-cryptenroll.
+tpm2-tools
+# Disk health: smartctl and smartd.
+smartmontools
