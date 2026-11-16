@@ -90,6 +90,9 @@ cp -a --reflink=auto /sysroot/home/alice /var/home/alice
 restorecon -R /var/home/alice
 ```
 
+The password is for local and sudo use: sshd accepts keys only, so keep an
+`~/.ssh/authorized_keys` in the copied home for SSH.
+
 If the old `/home` is a separate partition or subvolume, mount it at
 `/var/home` instead, with a kernel argument (bootc's preferred way over
 editing `fstab`). Pass it at install time:
