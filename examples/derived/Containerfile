@@ -1,0 +1,18 @@
+# A minimal image derived from atomic-linux, using the hooks the README
+# documents. A real downstream repository pins BASE by digest:
+#   ghcr.io/cgwalters-forge/atomic-linux@sha256:...
+# To build against a local `just build`:
+#   podman build --build-arg BASE=localhost/atomic-linux:stable examples/derived
+ARG BASE=ghcr.io/cgwalters-forge/atomic-linux:stable
+FROM ${BASE}
+
+# Record this image's identity and update origin in image-info.json.
+ARG IMAGE_NAME=example-derived
+ARG IMAGE_VENDOR=example
+ARG IMAGE_REGISTRY=registry.example.com/example
+RUN /usr/libexec/atomic-linux/write-image-info
+
+# Add k3s settings without replacing the base configuration.
+COPY k3s-reserved.yaml /etc/rancher/k3s/config.yaml.d/50-reserved.yaml
+
+RUN bootc container lint --fatal-warnings
