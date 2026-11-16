@@ -27,9 +27,11 @@ and images are not yet signed.
   real exposure; firewalld and SSH authentication still govern it.
 - `bootc install` defaults to a btrfs root.
 - Container short names are enforcing, with no search registries.
-- firewalld enabled, and the `FedoraWorkstation` zone without Fedora's
-  default 1025-65535 tcp/udp opening (dhcpv6-client, samba-client and ssh
-  stay).
+- firewalld enabled, and the default `FedoraWorkstation` zone denies
+  everything inbound apart from `ssh` and `tailscale` (UDP 41641, for direct
+  tailnet connections), replacing Fedora's 1025-65535 tcp/udp opening.
+  `dhcpv6-client` and `samba-client` are gone too, so stateful DHCPv6 and
+  NetBIOS browsing need a derived image to add them back.
 - k3s, checksum-pinned with k3s-selinux, **installed but disabled**. Its
   configuration (SELinux, secrets encryption, Flannel VXLAN, Traefik and
   ServiceLB off, NodePorts on loopback only, a `k3s` firewalld zone trusting
