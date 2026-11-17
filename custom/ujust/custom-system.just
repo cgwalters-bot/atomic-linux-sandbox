@@ -1,92 +1,53 @@
-# vim: set ft=make :
-#######################
-### custom-system.just
-#######################
-## Example system configuration commands
-## These are simplified examples adapted from Bluefin
-
-# Run a system benchmark (requires stress-ng from Homebrew)
+# Show the booted, staged and rollback images (no changes).
 [group('System')]
-benchmark:
-    #!/usr/bin/env bash
-    source /usr/lib/ujust/ujust.sh
-    if ! type -P "stress-ng" &>/dev/null ; then
-        echo "stress-ng is not installed."
-        if command -v brew &>/dev/null; then
-            if gum confirm "Install stress-ng via Homebrew?" ; then
-                brew install stress-ng
-                brew link stress-ng
-            else
-                exit 0
-            fi
-        else
-            echo "Please install stress-ng to run benchmarks."
-            exit 1
-        fi
-    fi
-    echo 'Running a 1 minute benchmark...'
-    pushd $(mktemp -d) > /dev/null
-    stress-ng --matrix 0 -t 1m --times
-    popd > /dev/null
+status:
+    sudo bootc status
 
-# Configure docker and libvirt groups for development
-[group('System')]
-configure-dev-groups:
-    #!/usr/bin/pkexec bash
-    CURRENT_USER="{{ `id -un` }}"
-    echo "Adding $CURRENT_USER to docker and libvirt groups..."
-
-    # Ensure groups exist in /etc/group
-    for group in docker libvirt; do
-        if ! grep -q "^$group:" /etc/group; then
-            echo "Adding $group to /etc/group"
-            grep "^$group:" /usr/lib/group | tee -a /etc/group > /dev/null
-        fi
-        usermod -aG $group $CURRENT_USER
-    done
-
-    echo "Groups configured. Log out and back in for changes to take effect."
-
-# Example toggle command with user choice
-[group('System')]
-toggle-example-feature:
-    #!/usr/bin/bash
-    source /usr/lib/ujust/ujust.sh
-    echo "This is an example toggle command."
-    echo "Current status: [check your status here]"
-    OPTION=$(Choose "Enable" "Disable" "Cancel")
-    case "$OPTION" in
-        "Enable")
-            echo "Enabling feature..."
-            # Add your enable logic here
-            ;;
-        "Disable")
-            echo "Disabling feature..."
-            # Add your disable logic here
-            ;;
-        "Cancel")
-            echo "No changes made."
-            ;;
-    esac
-
-# Clean up container images and volumes
+# Fetch and stage a host upgrade without rebooting or changing update timers.
 [group('Maintenance')]
-clean-containers:
-    #!/usr/bin/bash
-    echo "Cleaning up Podman containers, images, and volumes..."
-    podman system prune -af
-    podman volume prune -f
-    echo "Cleanup complete!"
+upgrade:
+    sudo bootc upgrade
 
-# Update system and reboot if needed
+# Select the previous deployment for the next boot; does not reboot.
+[group('Maintenance')]
+rollback:
+    sudo bootc rollback
+
+# Reboot only after confirmation; default-no prevents accidental interruption.
+[group('Maintenance')]
+reboot:
+    #!/usr/bin/bash
+    set -euo pipefail
+    # Do not let an inherited timeout submit the highlighted choice.
+    if gum confirm --timeout=0s --default=false "Reboot the host now?"; then
+        systemctl reboot
+    fi
+
+# Stage an upgrade, then ask before rebooting; a failed upgrade stops here.
 [group('Maintenance')]
 update-and-reboot:
     #!/usr/bin/bash
-    source /usr/lib/ujust/ujust.sh
-    echo "Updating system..."
+    set -euo pipefail
     sudo bootc upgrade
-    if gum confirm "Reboot now to apply updates?"; then
-        systemctl reboot
-    else
-        echo "Reboot later to apply updates."
+    ujust reboot
+
+# Prune unused local containers, networks and images; keep pods and volumes.
+[group('Maintenance')]
+clean-containers:
+    #!/usr/bin/bash
+    set -euo pipefail
+    unset CONTAINER_HOST CONTAINER_CONNECTION
+    # System prune also removes stopped pods, which can delete anonymous volumes.
+    podman --remote=false container prune
+    podman --remote=false network prune
+    podman --remote=false image prune --all
+
+# Opt in to deleting unused volumes (including named volumes) and their data.
+[group('Maintenance')]
+clean-container-volumes:
+    #!/usr/bin/bash
+    set -euo pipefail
+    unset CONTAINER_HOST CONTAINER_CONNECTION
+    if gum confirm --timeout=0s --default=false "Permanently delete this user's unused Podman volumes and their data?"; then
+        podman --remote=false volume prune
     fi

@@ -47,6 +47,10 @@ cp /ctx/custom/brew/*.Brewfile /usr/share/ublue-os/homebrew/
 mkdir -p /usr/share/ublue-os/just/
 find /ctx/custom/ujust -iname '*.just' -exec printf "\n\n" \; -exec cat {} \; >>/usr/share/ublue-os/just/60-custom.just
 
+# Fedora provides just, but not the ujust entry point. Install only our wrapper,
+# not Bluefin's desktop recipes or service policy from the common context.
+install -D -m 0755 /ctx/build/ujust.sh /usr/bin/ujust
+
 # Restore default glob behavior
 shopt -u nullglob
 

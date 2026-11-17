@@ -23,8 +23,8 @@ and images are not yet signed.
 The shared base, in both variants:
 
 - Fedora bootc 45, digest-pinned, with Universal Blue's
-  Homebrew integration (`brew-setup`, update and upgrade timers), `ujust`
-  example recipes and example Brewfiles.
+  Homebrew integration (`brew-setup`, update and upgrade timers), a `ujust`
+  launcher with host maintenance commands, and example Brewfiles.
   `@projectbluefin/common` is in the build context but not overlaid.
 - `tmux` and `gum` (used by the ujust recipes); `podman.socket` enabled.
 - Host services: `tailscaled` enabled but not logged in (`tailscale up`, tags
