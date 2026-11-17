@@ -30,3 +30,6 @@ pipewire-pulseaudio
 power-profiles-daemon
 wireplumber
 wpa_supplicant
+# Explicit AMD RADV userspace and the Vulkan loader; no GPU tuning defaults.
+mesa-vulkan-drivers
+vulkan-loader
