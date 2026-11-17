@@ -23,9 +23,23 @@ COPY custom /custom
 COPY --from=common /system_files /oci/common
 COPY --from=brew /system_files /oci/brew
 
+# The image is composefs-only and built from scratch: the Fedora bootc image
+# is only the builder. build-rootfs composes a fresh root from Fedora's
+# repositories with the base image's own (standard) manifest, and the ostree
+# link and repository (/ostree, /sysroot/ostree) are dropped before the copy,
+# so no layer of the image carries them. rpm-ostree needs the privileges the
+# Justfile's build recipe passes. Alternative with the same layout:
+# quay.io/centos-bootc/centos-bootc:stream10.
+FROM quay.io/fedora/fedora-bootc:45@sha256:d3f0430d6a5f0df81eaebda4d4a4ea3c3fe2524dfbc135059e7811d35902309d AS builder
+RUN --mount=type=cache,dst=/var/cache/rpm-ostree \
+    /usr/libexec/bootc-base-imagectl build-rootfs --manifest=standard --cachedir=/var/cache/rpm-ostree / /target-rootfs \
+    && rm -rf /target-rootfs/ostree /target-rootfs/sysroot/ostree
+
 # The shared base: headless Fedora bootc, with what every variant carries.
-# Alternative with the same layout: quay.io/centos-bootc/centos-bootc:stream10.
-FROM quay.io/fedora/fedora-bootc:45@sha256:d3f0430d6a5f0df81eaebda4d4a4ea3c3fe2524dfbc135059e7811d35902309d AS base
+FROM scratch AS base
+COPY --from=builder /target-rootfs/ /
+LABEL containers.bootc="1"
+STOPSIGNAL SIGRTMIN+3
 
 # The build's own tools (dnf5 config-manager and versionlock, rsync). Keep the
 # dnf cache during the build; clean-stage.sh restores the default.
@@ -42,17 +56,15 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/build/10-build.sh
 
-# Optional: a newer bootc, the composefs storage backend instead of ostree,
-# and a transient /etc; see build/15-bootc.sh and the README. The defaults
-# change nothing.
+# The composefs-native setup, optionally with a newer bootc or a transient
+# /etc; see build/15-bootc.sh and the README.
 ARG BOOTC_SOURCE="fedora"
-ARG STORAGE_BACKEND="ostree"
 ARG ETC_MODE="persistent"
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache/libdnf5 \
     --mount=type=tmpfs,dst=/boot \
     --mount=type=tmpfs,dst=/tmp \
-    BOOTC_SOURCE="${BOOTC_SOURCE}" STORAGE_BACKEND="${STORAGE_BACKEND}" ETC_MODE="${ETC_MODE}" /ctx/build/15-bootc.sh
+    BOOTC_SOURCE="${BOOTC_SOURCE}" ETC_MODE="${ETC_MODE}" /ctx/build/15-bootc.sh
 
 # k3s is a separately pinned release, installed but not enabled; a derived
 # image opts in with `systemctl enable k3s.service`.
@@ -106,4 +118,8 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 
 CMD ["/sbin/init"]
 
-RUN bootc container lint --fatal-warnings
+# Composefs only: fail if any step brought back the ostree link or repository.
+RUN if [ -e /ostree ] || [ -L /ostree ] || [ -e /sysroot/ostree ]; then \
+        echo "error: the image carries /ostree or /sysroot/ostree" >&2; exit 1; \
+    fi \
+    && bootc container lint --fatal-warnings

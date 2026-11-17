@@ -11,11 +11,10 @@ export PODMAN := env("PODMAN", "podman")
 export BCVK := env("BCVK", "bcvk")
 export BCVK_CONNECTION := env("BCVK_CONNECTION", "qemu:///session")
 
-# Read by build/15-bootc.sh: fedora, updates-testing or copr; ostree or
-# composefs; persistent or transient.
+# Read by build/15-bootc.sh: fedora, updates-testing or copr; persistent or
+# transient.
 
 export BOOTC_SOURCE := env("BOOTC_SOURCE", "fedora")
-export STORAGE_BACKEND := env("STORAGE_BACKEND", "ostree")
 export ETC_MODE := env("ETC_MODE", "persistent")
 
 # Optional page counts; empty leaves the kernel's TTM defaults alone.
@@ -52,13 +51,17 @@ build tag=DEFAULT_TAG:
     version="${fedora_version}.$(date -u +%Y%m%d)"
     revision=$(git rev-parse HEAD 2>/dev/null || true)
     source_url="https://github.com/${IMAGE_VENDOR}/${IMAGE_NAME}"
+    # The Containerfile's builder stage runs rpm-ostree (bootc-base-imagectl
+    # build-rootfs), which needs these to sandbox its scriptlets.
     ${PODMAN} build \
+        --cap-add=all \
+        --security-opt=label=disable \
+        --device /dev/fuse \
         --build-arg "IMAGE_NAME=${IMAGE_NAME}" \
         --build-arg "IMAGE_VENDOR=${IMAGE_VENDOR}" \
         --build-arg "UBLUE_IMAGE_TAG={{ tag }}" \
         --build-arg "VARIANT=${VARIANT}" \
         --build-arg "BOOTC_SOURCE=${BOOTC_SOURCE}" \
-        --build-arg "STORAGE_BACKEND=${STORAGE_BACKEND}" \
         --build-arg "ETC_MODE=${ETC_MODE}" \
         --build-arg "TTM_PAGES_LIMIT=${TTM_PAGES_LIMIT}" \
         --build-arg "TTM_PAGE_POOL_SIZE=${TTM_PAGE_POOL_SIZE}" \
@@ -75,12 +78,12 @@ build tag=DEFAULT_TAG:
         --tag "${IMAGE_NAME}:{{ tag }}" \
         .
 
-# Composefs-native variant; needs bootc 1.17 (updates-testing, or copr for main).
+# The default build, tagged composefs; kept for composefs.yml until it folds into build.yml.
 [group('Image')]
-build-composefs tag="composefs" source="updates-testing":
-    BOOTC_SOURCE={{ source }} STORAGE_BACKEND=composefs {{ just_executable() }} --justfile "{{ justfile() }}" build {{ tag }}
+build-composefs tag="composefs":
+    {{ just_executable() }} --justfile "{{ justfile() }}" build {{ tag }}
 
-# Test variant with a transient /etc and an audit watch on it (ostree backend).
+# Test variant with a transient /etc and an audit watch on it.
 [group('Image')]
 build-transient-etc tag="transient-etc":
     ETC_MODE=transient {{ just_executable() }} --justfile "{{ justfile() }}" build {{ tag }}

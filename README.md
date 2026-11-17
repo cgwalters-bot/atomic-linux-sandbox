@@ -52,9 +52,12 @@ The shared base, in both variants:
   smartmontools (`smartd` enabled; it skips VMs) and fwupd.
   `fwupd-refresh.timer` is enabled, so every host periodically fetches LVFS
   metadata; it never applies firmware by itself.
+- bootc's [composefs backend](#composefs-only), built from scratch with no
+  ostree repository.
 - `bootc-fetch-apply-updates.timer` enabled, but stage-only: updates are
-  fetched and staged in the background and never trigger a reboot
-  ([docs/updates.md](docs/updates.md)).
+  meant to be fetched and staged in the background and never trigger a
+  reboot. On composefs the timer does not run yet; see
+  [docs/updates.md](docs/updates.md).
 - `bootc install` defaults to a btrfs root.
 - Container short names are enforcing, with no search registries.
 - firewalld enabled, and the default `FedoraWorkstation` zone (selected by
@@ -173,42 +176,63 @@ A derived image that installs packages should run `dnf5 clean all` (or reuse
 this repository's `build/clean-stage.sh` pattern) so its own
 `bootc container lint` passes.
 
-## composefs backend (optional)
+## composefs only
 
-bootc has two storage backends: ostree, the default here, and
-[composefs](https://bootc-dev.github.io/bootc/bootc-composefs.7.html), which
-bootc 1.17.0 declared stable. `just build-composefs` builds a
-composefs-native variant as `atomic-linux:composefs`: `build/15-bootc.sh`
-installs a newer bootc, ships `/usr/lib/composefs/setup-root-conf.toml`,
-removes ostree's `prepare-root.conf` and adds bootc's `51bootc` dracut module
-to the initramfs. `bootc install` (and so bcvk) then picks the composefs
+The image uses bootc's
+[composefs backend](https://bootc-dev.github.io/bootc/bootc-composefs.7.html)
+only; there is no ostree build. The Containerfile uses the Fedora bootc image
+as a builder: `bootc-base-imagectl build-rootfs` composes a fresh root from
+the base's own `standard` manifest, the image starts `FROM scratch` with that
+root, and our packages, drop-ins and variants go on top. It has no `/ostree`
+link and no `/sysroot/ostree` repository, which the build checks before
+`bootc container lint`. `build/15-bootc.sh` ships
+`/usr/lib/composefs/setup-root-conf.toml`, removes ostree's
+`prepare-root.conf` and regenerates the initramfs with bootc's `51bootc`
+dracut module. `bootc install` (and so bcvk) then picks the composefs
 backend by itself, with GRUB and BLS entries; no `--composefs-backend` flag is
 needed. The root is a read-only, fs-verity-checked EROFS image, and `/etc` and
 `/var` are per-deployment and shared state directories under `/sysroot/state`.
 
-It needs bootc 1.17 or newer, which the recipe takes from Fedora's
-updates-testing by default; the build fails early with older bootc. `source=copr` takes upstream's
-main branch from the `rhcontainerbot/bootc` COPR instead:
+Building runs rpm-ostree in the builder stage, so `just build` passes
+`--cap-add=all`, `--security-opt=label=disable` and `--device /dev/fuse` to
+`podman build`. composefs needs bootc 1.17 or newer, and the build fails early
+with older bootc. `BOOTC_SOURCE` picks where bootc comes from: `fedora`, the
+default, keeps the build root's Fedora bootc (1.17.1 or newer in Fedora 45);
+`updates-testing` takes Fedora's newest build, and `copr` takes upstream's
+main branch from the `rhcontainerbot/bootc` COPR:
 
 ```sh
-just build-composefs                     # bootc from Fedora updates-testing
-just build-composefs composefs copr      # bootc from upstream main
-just composefs-vm-test                   # install, upgrade, switch, rollback
+just build                                 # bootc from Fedora
+BOOTC_SOURCE=copr just build               # bootc from upstream main
+just composefs-vm-test stable              # install, upgrade, switch, rollback
 ```
 
 `composefs-vm-test` installs the build in a disposable libvirt VM on a btrfs
 root and checks that the composefs backend is booted, that an `/etc` and a
 `/var` edit survive `bootc upgrade`, and that `bootc switch` and
 `bootc rollback` boot the expected images, with SELinux enforcing and the k3s
-preflight unit working. CI builds and lints the variant on every pull
-request and push to `main`, boots it with `bcvk ephemeral` and runs
-`composefs-vm-test`, but does not publish it, and these jobs do not gate
-`stable`.
+preflight unit working.
+
+**Moving from ostree.** An existing ostree host, including one installed
+from an earlier ostree build of this image, must not `bootc switch` or
+`bootc upgrade` onto it in place: bootc does not support that move and
+nothing here tests it. Such a host should stop
+`bootc-fetch-apply-updates.timer` and install fresh with `bootc install
+to-disk` or `bootc install to-existing-root` (see
+[docs/install.md](docs/install.md) and #68).
+
+The builder stage installs whatever Fedora 45's repositories carry at build
+time; the base digest pins the build tools and manifest, not the packages.
+
+**Signatures.** On composefs, bootc ignores
+`--enforce-container-sigpolicy` and records the origin as unverified, but
+the image is still pulled through containers/image, which checks
+`/etc/containers/policy.json`. That file is the only signature enforcement:
+a host or derived image that wants signed updates must require them there
+(#46).
 
 Known gaps, as of bootc 1.17.1 (October 2026):
 
-- There is no in-place move from ostree; install fresh. Do not
-  `bootc switch` an ostree install to the composefs build.
 - rpm-ostree, and so GNOME Software's OS updates, do not work; use
   `bootc upgrade` (`ujust update-and-reboot`). `bootc-fetch-apply-updates.timer` is
   conditioned on `/run/ostree-booted` and never runs
@@ -227,19 +251,19 @@ regenerate the initramfs, which carries bootc's mount code.
 
 ## Transient /etc (test variant, opt-in)
 
-`just build-transient-etc` builds `atomic-linux:transient-etc` with ostree's
-`etc.transient`: `/etc` is an overlay whose upperdir is on tmpfs, reset on
-every boot. `ETC_MODE` defaults to `persistent`; the normal image and stable
-promotion are unchanged. Transient mode refuses `STORAGE_BACKEND=composefs`,
-which does not use ostree's `prepare-root.conf`. The build preserves the
-base configuration, regenerates the initramfs with ostree's dracut module,
-and verifies that its copy of `prepare-root.conf` enables transient mode.
+`just build-transient-etc` builds `atomic-linux:transient-etc` with
+composefs's transient `/etc` (`[etc] transient = true` in
+`setup-root-conf.toml`, bootc-setup-root-conf.toml(5)): `/etc` is an overlay
+whose upperdir is on tmpfs, reset on every boot. `ETC_MODE` defaults to
+`persistent`; the normal image and stable promotion are unchanged. The build
+verifies that the regenerated initramfs carries the same
+`setup-root-conf.toml`.
 `bootc container lint --fatal-warnings` remains mandatory.
 
 With bcvk, libvirt and KVM, run `just transient-etc-vm-test`. This installs a
 disposable VM, asserts a tmpfs-backed `/etc`, writes a marker, reboots and
 asserts the marker disappeared. Unlike `bcvk ephemeral`, this actually
-exercises ostree-prepare-root. Only this variant includes the early audit
+exercises bootc-root-setup.service. Only this variant includes the early audit
 watch, `audit=1` and an audit-rules drop-in. It is measurement instrumentation,
 not a security enforcement boundary; the test intentionally changes `/etc`.
 
@@ -297,7 +321,7 @@ Status: the variant and this installed-VM test exist, and `just lint` runs
 the collector's synthetic tests, but nothing has booted the variant yet.
 Producing a report needs a separate, non-gating workflow that builds the
 variant and runs this test on a hosted runner with KVM; it has not been added.
-Ordinary-image and composefs CI do not exercise this variant. Draw no
+CI does not exercise this variant. Draw no
 conclusions about machine-id or installer configuration behavior until a
 measured report is linked here.
 
