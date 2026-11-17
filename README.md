@@ -356,7 +356,8 @@ removes the VM it creates; `KEEP_FAILED_VM=1` keeps a failed one.
 request and boots the result in two VM jobs on a GitHub-hosted runner with
 KVM and a pinned bcvk: `vm-smoke` runs `just ephemeral-smoke`, and `vm-k3s`
 runs `just k3s-vm-create` and `just k3s-vm-test`. Both test the build job's
-saved image, checked by image ID, not a rebuild. KubeVirt (`just
+saved image, checked by image ID, not a rebuild; `vm-k3s` installs it with a
+one-file layer on top, as `just composefs-vm-test` does. KubeVirt (`just
 kubevirt-test`) needs nested KVM inside the test VM and is not run in CI.
 
 A push to `main` pushes the image to `ghcr.io/cgwalters-forge/atomic-linux`
