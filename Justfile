@@ -78,11 +78,6 @@ build tag=DEFAULT_TAG:
         --tag "${IMAGE_NAME}:{{ tag }}" \
         .
 
-# The default build, tagged composefs; kept for composefs.yml until it folds into build.yml.
-[group('Image')]
-build-composefs tag="composefs":
-    {{ just_executable() }} --justfile "{{ justfile() }}" build {{ tag }}
-
 # Test variant with a transient /etc and an audit watch on it.
 [group('Image')]
 build-transient-etc tag="transient-etc":
@@ -181,7 +176,7 @@ k3s-vm-test:
 
 # Install a composefs build in a disposable VM; check upgrade, switch, rollback.
 [group('Virtual Machine')]
-composefs-vm-test tag="composefs":
+composefs-vm-test tag=DEFAULT_TAG:
     tests/composefs-vm-test.sh "{{ local_image }}:{{ tag }}"
 
 # Install a transient-/etc build in a disposable VM; report what writes /etc.

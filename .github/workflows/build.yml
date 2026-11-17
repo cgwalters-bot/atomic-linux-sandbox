@@ -111,7 +111,9 @@ jobs:
 
   # Boots the image job's archive in VMs on a GitHub-hosted runner with KVM.
   # vm-smoke is the stateless `just ephemeral-smoke`; vm-k3s installs the
-  # image into a libvirt VM, enables k3s and runs k3s-validate. KubeVirt
+  # image into a libvirt VM, enables k3s and runs k3s-validate; vm-lifecycle
+  # installs it (`just composefs-vm-test`) and checks that the composefs
+  # backend is booted and that upgrade, switch and rollback work. KubeVirt
   # (nested KVM inside that VM) is not run here.
   vm:
     name: vm-${{ matrix.suite }}
@@ -123,7 +125,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [smoke, k3s]
+        suite: [smoke, k3s, lifecycle]
     env:
       # renovate: datasource=github-releases depName=bootc-dev/bcvk
       BCVK_VERSION: 0.21.0
@@ -196,6 +198,13 @@ jobs:
           ulimit -n
           just k3s-vm-create "${DEFAULT_TAG}"
           just k3s-vm-test
+
+      - name: Install, upgrade, switch and rollback
+        if: matrix.suite == 'lifecycle'
+        run: |
+          set -euo pipefail
+          sudo prlimit --pid "$$" --nofile=524288:524288
+          just composefs-vm-test "${DEFAULT_TAG}"
 
   # Moves the version tag and `stable` to the digest the VM jobs tested, by
   # retagging it in the registry: nothing is rebuilt or re-uploaded. A
