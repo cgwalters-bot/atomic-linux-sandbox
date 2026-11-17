@@ -25,7 +25,7 @@ COPY --from=brew /system_files /oci/brew
 
 # The shared base: headless Fedora bootc, with what every variant carries.
 # Alternative with the same layout: quay.io/centos-bootc/centos-bootc:stream10.
-FROM quay.io/fedora/fedora-bootc:45@sha256:1989dd9223dc2ef03e3be158165be13e55b5571c62e9f3c88992950cf355416d AS base
+FROM quay.io/fedora/fedora-bootc:45@sha256:d3f0430d6a5f0df81eaebda4d4a4ea3c3fe2524dfbc135059e7811d35902309d AS base
 
 # The build's own tools (dnf5 config-manager and versionlock, rsync). Keep the
 # dnf cache during the build; clean-stage.sh restores the default.
