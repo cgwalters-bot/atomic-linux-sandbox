@@ -78,7 +78,9 @@ The variants, chosen at build time with `VARIANT` (`build/40-variant.sh`):
 
 - **server** boots to `multi-user.target` and adds nothing to the base.
 - **desktop** adds a GNOME session (`custom/variants/desktop/`) and boots to
-  GDM on `graphical.target`.
+  GDM on `graphical.target`, with Mesa RADV/Vulkan userspace. See
+  [Desktop operation](docs/desktop.md) for rootless GPU workloads and opt-in
+  TTM build arguments, suspend settings and Wi-Fi diagnostics.
 
 Each variant's packages, files and units are drop-ins under
 `custom/variants/<variant>/`, laid out like the base's `custom/packages`,

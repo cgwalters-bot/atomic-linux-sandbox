@@ -16,6 +16,7 @@ Scripts are named with a number prefix (e.g., `10-build.sh`, `20-onepassword.sh`
 - **`15-bootc.sh`** - Optionally installs a newer bootc and makes the image composefs-native (`BOOTC_SOURCE`, `STORAGE_BACKEND`; see the top-level README)
 - **`20-k3s.sh`** - Installs a checksum-pinned k3s and k3s-selinux, left disabled
 - **`40-variant.sh`** - Adds the `VARIANT` (server or desktop) on top of the base: its drop-ins and default target
+- **`ttm-kargs.sh`** - Validates optional `TTM_PAGES_LIMIT` / `TTM_PAGE_POOL_SIZE` build arguments and writes a bootc kargs drop-in only when configured; see [desktop operation](../docs/desktop.md)
 - **`clean-stage.sh`** - Removes build leftovers so `bootc container lint` passes
 
 ## Example Scripts

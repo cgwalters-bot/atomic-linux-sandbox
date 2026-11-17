@@ -67,11 +67,14 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 FROM base
 
 ARG VARIANT="desktop"
+# Empty means no TTM kernel arguments, for either variant.
+ARG TTM_PAGES_LIMIT=""
+ARG TTM_PAGE_POOL_SIZE=""
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=cache,dst=/var/cache/libdnf5 \
     --mount=type=tmpfs,dst=/boot \
     --mount=type=tmpfs,dst=/tmp \
-    VARIANT="${VARIANT}" bash /ctx/build/40-variant.sh
+    VARIANT="${VARIANT}" TTM_PAGES_LIMIT="${TTM_PAGES_LIMIT}" TTM_PAGE_POOL_SIZE="${TTM_PAGE_POOL_SIZE}" bash /ctx/build/40-variant.sh
 
 # Image identity, recorded in /usr/share/ublue-os/image-info.json. Derived
 # images re-run /usr/libexec/atomic-linux/write-image-info with their own.

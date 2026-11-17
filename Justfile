@@ -18,6 +18,11 @@ export BOOTC_SOURCE := env("BOOTC_SOURCE", "fedora")
 export STORAGE_BACKEND := env("STORAGE_BACKEND", "ostree")
 export ETC_MODE := env("ETC_MODE", "persistent")
 
+# Optional page counts; empty leaves the kernel's TTM defaults alone.
+
+export TTM_PAGES_LIMIT := env("TTM_PAGES_LIMIT", "")
+export TTM_PAGE_POOL_SIZE := env("TTM_PAGE_POOL_SIZE", "")
+
 # The forge's shared workflow check (cgwalters-forge/actions, lint/README.md):
 # actionlint, zizmor and the runner-label policy. FORGE_ACTIONS is a checkout
 # of that repository beside this one. CONTAINER=podman runs it without docker.
@@ -55,6 +60,8 @@ build tag=DEFAULT_TAG:
         --build-arg "BOOTC_SOURCE=${BOOTC_SOURCE}" \
         --build-arg "STORAGE_BACKEND=${STORAGE_BACKEND}" \
         --build-arg "ETC_MODE=${ETC_MODE}" \
+        --build-arg "TTM_PAGES_LIMIT=${TTM_PAGES_LIMIT}" \
+        --build-arg "TTM_PAGE_POOL_SIZE=${TTM_PAGE_POOL_SIZE}" \
         --label "org.opencontainers.image.title=${IMAGE_NAME}" \
         --label "org.opencontainers.image.version=${version}" \
         --label "org.opencontainers.image.description=Generic Fedora bootc host image, ${VARIANT} variant" \
@@ -83,6 +90,7 @@ build-transient-etc tag="transient-etc":
 lint:
     shellcheck build/*.sh custom/system/usr/libexec/k3s-* tests/*.sh tests/image/*.sh tests/kubevirt/*.sh
     python3 -B -m unittest discover -s tests -p 'test_transient_etc*.py'
+    python3 -B -m unittest discover -s tests -p 'test_desktop.py'
 
 # Containerfile lint (pulls the hadolint image).
 [group('Quality')]
@@ -113,8 +121,8 @@ image-test tag=DEFAULT_TAG:
     failed=()
     for test in "${tests[@]}"; do
         echo "== ${test}"
-        if ! ${PODMAN} run --rm -i --timeout "${IMAGE_TEST_TIMEOUT:-120}" --network=none --security-opt label=disable --env VARIANT \
-            -v "$PWD/custom:/ctx/custom:ro" "{{ local_image }}:{{ tag }}" bash -s < "${test}"; then
+        if ! ${PODMAN} run --rm -i --timeout "${IMAGE_TEST_TIMEOUT:-120}" --network=none --security-opt label=disable --env VARIANT --env TTM_PAGES_LIMIT --env TTM_PAGE_POOL_SIZE \
+            -v "$PWD/custom:/ctx/custom:ro" -v "$PWD/build:/ctx/build:ro" "{{ local_image }}:{{ tag }}" bash -s < "${test}"; then
             failed+=("${test}")
         fi
     done

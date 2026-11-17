@@ -1,0 +1,4 @@
+# Inactive example: copy into the chosen dconf database; see docs/desktop.md.
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'

@@ -58,6 +58,18 @@ fi
 # Desktops upgrading from Silverblue keep their Flatpak apps, Wi-Fi, audio
 # and keyring, whatever the drop-in lists say.
 if [[ "${VARIANT}" == desktop ]]; then
-	rpm -q flatpak NetworkManager-wifi wpa_supplicant pipewire wireplumber gnome-keyring
+	rpm -q flatpak NetworkManager-wifi wpa_supplicant pipewire wireplumber gnome-keyring power-profiles-daemon toolbox fwupd mesa-vulkan-drivers vulkan-loader
 	command -v flatpak >/dev/null
+	# Validate the installed RADV manifest and its actual ELF library, not
+	# just the package name (which also contains software Vulkan drivers).
+	mapfile -t icds < <(rpm -ql mesa-vulkan-drivers | grep '/radeon_icd.*\.json$')
+	((${#icds[@]} > 0))
+	for icd in "${icds[@]}"; do
+		library=$(jq -er '.ICD.library_path | select(contains("libvulkan_radeon.so"))' "${icd}")
+		if [[ "${library}" == /* ]]; then
+			test -f "${library}"
+		else
+			ldconfig -p | grep -F "${library} "
+		fi
+	done
 fi

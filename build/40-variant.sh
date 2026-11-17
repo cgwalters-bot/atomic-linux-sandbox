@@ -9,6 +9,9 @@ set -euo pipefail
 # shellcheck source=build/drop-ins.sh
 source /ctx/build/drop-ins.sh
 
+# shellcheck source=build/ttm-kargs.sh
+source /ctx/build/ttm-kargs.sh
+
 VARIANT="${VARIANT:-desktop}"
 
 case "${VARIANT}" in
@@ -21,4 +24,5 @@ desktop) target=graphical.target ;;
 esac
 
 apply_drop_ins "/ctx/custom/variants/${VARIANT}"
+write_ttm_kargs ""
 systemctl set-default "${target}"
