@@ -39,6 +39,10 @@ The shared base, in both variants:
 - Debug tools for hosts that cannot easily rebuild: `strace`, `ltrace`,
   `perf`, `bpftrace` and `sysstat`. sysstat's periodic collection into
   `/var/log/sa` is preset off; `systemctl enable sysstat.service` turns it on.
+- Cockpit web console and system, Podman, storage, NetworkManager and VM
+  management pages, with `cockpit.socket` disabled (also by first-boot presets).
+  No Cockpit firewall opening or VPN configuration is shipped. Access is a
+  [downstream-only opt-in](docs/cockpit.md).
 - `sshd.service` enabled, because bcvk's VM install waits for SSH. That is a
   real exposure, so firewalld governs it and sshd accepts keys only: password
   and keyboard-interactive login are off, and root may log in only with a key.

@@ -1,0 +1,4 @@
+# Avoid exposing a privileged web login before downstream configures access.
+# First match wins: precede Fedora/Cockpit enable rules, including preset-all
+# at first boot. This is not a mask; downstream can enable the socket.
+disable cockpit.socket

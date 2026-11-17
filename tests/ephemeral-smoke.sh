@@ -24,6 +24,11 @@ esac
 command -v tmux gum k3s
 test "$(systemctl is-enabled k3s.service || true)" = disabled
 systemctl is-active firewalld
+test "$(systemctl is-enabled cockpit.socket || true)" = disabled
+for unit in cockpit.socket cockpit.service; do
+    test "$(systemctl is-active "${unit}" || true)" = inactive
+done
+test -z "$(ss -H -lnt 'sport = :9090')"
 getent hosts fedoraproject.org
 # Any HTTP response proves DNS, routing and TLS; not --fail, since one of
 # fedoraproject.org's proxies intermittently answers 404.

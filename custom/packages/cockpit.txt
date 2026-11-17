@@ -1,0 +1,7 @@
+# Management capability only; downstream configures access and enables the socket.
+cockpit-ws
+cockpit-system
+cockpit-podman
+cockpit-storaged
+cockpit-networkmanager
+cockpit-machines
