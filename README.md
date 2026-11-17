@@ -24,7 +24,7 @@ The shared base, in both variants:
 
 - Fedora bootc 45, digest-pinned, with Universal Blue's
   Homebrew integration (`brew-setup`, update and upgrade timers), `ujust`
-  example recipes, and example Brewfiles and Flatpak preinstall files.
+  example recipes and example Brewfiles.
   `@projectbluefin/common` is in the build context but not overlaid.
 - `tmux` and `gum` (used by the ujust recipes); `podman.socket` enabled.
 - Host services: `tailscaled` enabled but not logged in (`tailscale up`, tags
@@ -80,11 +80,41 @@ The variants, chosen at build time with `VARIANT` (`build/40-variant.sh`):
 - **desktop** adds a GNOME session (`custom/variants/desktop/`) and boots to
   GDM on `graphical.target`, with Mesa RADV/Vulkan userspace. See
   [Desktop operation](docs/desktop.md) for rootless GPU workloads and opt-in
-  TTM build arguments, suspend settings and Wi-Fi diagnostics.
+  TTM build arguments, suspend settings and Wi-Fi diagnostics. It ships the
+  system Flathub remote and a small Flatpak preinstall list, not installed
+  apps; see [Desktop Flatpaks](#desktop-flatpaks).
 
 Each variant's packages, files and units are drop-ins under
 `custom/variants/<variant>/`, laid out like the base's `custom/packages`,
 `custom/system` and `custom/units`.
+
+## Desktop Flatpaks
+
+Only the desktop drop-ins ship `/usr/share/flatpak/remotes.d/flathub.flatpakrepo`
+(the [official Flathub definition](https://flathub.org/repo/flathub.flatpakrepo),
+including its public verification key, with `CollectionID=org.flathub.Stable`
+added to bind preinstalls before any metadata refresh). Flatpak discovers it
+as the **system** remote `flathub`, URL `https://dl.flathub.org/repo/`, on first
+use, even offline. Signature verification stays enabled. Fedora's remote
+setup service remains masked and removed. No remote registration or app
+downloads run during the build: final cleanup deletes `/var` state.
+
+The desktop's `preinstall.d/default.preinstall` requests stable
+`org.mozilla.firefox` and `org.gnome.Calculator` from that collection. The
+server ships neither payload and stays headless. This does **not** promise
+installed apps at first login: use the packaged command explicitly after
+boot, when network access and download time are acceptable:
+
+```sh
+sudo flatpak preinstall --system --noninteractive
+```
+
+This downloads apps and their shared runtimes into `/var/lib/flatpak`, which
+can take substantial space and time. On a fresh offline host the remote can
+be discovered, but the apps cannot be downloaded; retry the command online.
+No new background service or timer is enabled. See
+[Flatpak preinstall integration](custom/flatpaks/README.md) for the checked
+Fedora package interface, downstream overrides and runtime verification.
 
 ## Runner slice
 
