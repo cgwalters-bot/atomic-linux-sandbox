@@ -112,14 +112,16 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/boot \
     /ctx/build/clean-stage.sh
 
-# Writable /opt for runtime-installed software. An image that installs RPMs
-# into /opt at build time should use `RUN rm /opt && mkdir /opt` instead.
-RUN rm -rf /opt && ln -s /var/opt /opt
-
 CMD ["/sbin/init"]
 
+# Writable /opt for runtime-installed software. An image that installs RPMs
+# into /opt at build time should use `RUN rm /opt && mkdir /opt` instead.
 # Composefs only: fail if any step brought back the ostree link or repository.
-RUN if [ -e /ostree ] || [ -L /ostree ] || [ -e /sysroot/ostree ]; then \
+# The checks share this step because a check-only RUN would end the image
+# with an empty layer, which bootc's composefs install rejects ("Invalid
+# splitstream content type").
+RUN rm -rf /opt && ln -s /var/opt /opt \
+    && if [ -e /ostree ] || [ -L /ostree ] || [ -e /sysroot/ostree ]; then \
         echo "error: the image carries /ostree or /sysroot/ostree" >&2; exit 1; \
     fi \
     && bootc container lint --fatal-warnings
