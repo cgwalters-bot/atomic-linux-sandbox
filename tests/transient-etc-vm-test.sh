@@ -1,7 +1,8 @@
 #!/usr/bin/bash
 # Installed disposable VM test from PR #17, not bcvk ephemeral (virtiofs
-# skips ostree-prepare-root). Findings are non-gating; failed collection,
-# boot, or transient-mount/reset assertions fail acceptance.
+# skips bootc-root-setup.service, which mounts the transient /etc).
+# Findings are non-gating; failed collection, boot, or transient-mount/reset
+# assertions fail acceptance.
 # Usage: transient-etc-vm-test.sh IMAGE [REPORT]
 # Environment: BCVK, BCVK_CONNECTION; KEEP_FAILED_VM=1 retains a failed VM.
 

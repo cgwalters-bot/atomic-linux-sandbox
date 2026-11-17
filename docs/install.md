@@ -12,8 +12,12 @@ Use `IMAGE` below for the image you install: usually a derived image (see
 "Deriving an image" in the [README](../README.md)), or
 `ghcr.io/cgwalters-forge/atomic-linux:stable` to try the desktop variant
 (the server variant is not published yet). Images are
-not signed yet. This guide covers the default ostree backend, not the
-composefs variant.
+not signed yet. The image uses bootc's composefs backend only (see
+"composefs only" in the README), so every install below is a fresh one.
+
+On composefs, bootc ignores `--enforce-container-sigpolicy` and records the
+image's origin as unverified; `/etc/containers/policy.json`, which is still
+checked on every pull, is the only signature enforcement.
 
 ## Onto an existing Fedora machine: `bootc install to-existing-root`
 
@@ -103,8 +107,8 @@ bootc install to-existing-root ... \
   --karg=systemd.mount-extra=UUID=<fs-uuid>:/var/home:btrfs:subvol=home
 ```
 
-or add it afterwards with
-`rpm-ostree kargs --append=systemd.mount-extra=...` and reboot.
+`rpm-ostree kargs` does not work on composefs, so decide this before
+installing.
 
 Copy configuration you want from `/sysroot/etc` selectively, for example
 NetworkManager profiles from
@@ -114,27 +118,19 @@ Don't copy generated files such as `resolv.conf`, and don't copy
 `/usr/lib/passwd` and `/usr/lib/group`, and old entries would shadow them.
 Anything every machine should have belongs in the derived image rather than
 in `/etc`. When you have what you need, remove the old tree by hand after
-`mount -o remount,rw /sysroot`, taking care to leave `/sysroot/ostree` and
-`/sysroot/boot` alone.
+`mount -o remount,rw /sysroot`, taking care to leave `/sysroot/composefs`,
+`/sysroot/state` and `/sysroot/boot` alone.
 
-## From Fedora Atomic: `bootc switch`
+## From Fedora Atomic or an ostree build: no `bootc switch`
 
-On Silverblue, Kinoite or another Fedora Atomic desktop, switching keeps
-`/etc`, `/var` and `/home` and the current deployment as a rollback target:
-
-```sh
-sudo bootc switch IMAGE
-sudo systemctl reboot
-```
-
-bootc refuses to switch a deployment with local rpm-ostree changes (layered
-packages, overrides); remove them with `rpm-ostree reset` and reboot first,
-or put them in the derived image. Alternatively
-`rpm-ostree rebase ostree-unverified-registry:IMAGE` switches without
-removing them. Changes you made in `/etc` stay and take precedence
-over the image's defaults, so review `ostree admin config-diff` afterwards,
-especially for firewalld zones and `containers/registries.conf`, which this
-image ships.
+Silverblue, Kinoite, other Fedora Atomic desktops and hosts installed from
+an earlier (ostree) build of this image use bootc's ostree backend. They
+must not `bootc switch`, `bootc upgrade` or `rpm-ostree rebase` onto this
+composefs image in place; stop `bootc-fetch-apply-updates.timer` on hosts
+that track it. They need a fresh install. `to-disk` below works from another
+system; `to-existing-root` over an ostree host is not supported here yet,
+and the steps above, written for a package-based Fedora, do not match its
+layout (#68).
 
 ## Fresh disks: `to-disk` and ISOs
 
