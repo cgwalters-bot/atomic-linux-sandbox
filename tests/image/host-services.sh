@@ -19,3 +19,22 @@ for binary in node nodejs; do
 		exit 1
 	fi
 done
+
+# All Cockpit components must be present in both variants, but no listener
+# should be enabled. This runs in a disposable image-test container, not a host.
+rpm -q cockpit-ws cockpit-system cockpit-podman cockpit-storaged cockpit-networkmanager cockpit-machines
+assert_cockpit_disabled() {
+	local state
+	state=$(systemctl is-enabled cockpit.socket || true)
+	if [[ "${state}" != disabled ]]; then
+		echo "error: cockpit.socket is '${state}', expected disabled (not masked)" >&2
+		exit 1
+	fi
+}
+assert_cockpit_disabled
+# Prove opt-in works, then exercise the first-boot operation with the actual
+# installed vendor presets. The preset must undo prior explicit enablement.
+systemctl enable cockpit.socket
+[[ $(systemctl is-enabled cockpit.socket) == enabled ]]
+systemctl preset-all
+assert_cockpit_disabled

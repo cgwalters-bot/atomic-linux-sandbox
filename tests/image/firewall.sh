@@ -10,7 +10,7 @@ if [[ "${services}" != "ssh tailscale" ]]; then
 	exit 1
 fi
 
-for list in ports protocols source-ports forward-ports rich-rules sources; do
+for list in ports protocols source-ports forward-ports rich-rules sources interfaces; do
 	entries=$(firewall-offline-cmd --zone="${zone}" "--list-${list}")
 	if [[ -n "${entries}" ]]; then
 		echo "error: zone ${zone} has ${list}: ${entries}" >&2

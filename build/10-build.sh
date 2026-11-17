@@ -26,6 +26,9 @@ echo "::endgroup::"
 # custom/packages/*.txt, custom/system/ and custom/units/*.enable.
 apply_drop_ins /ctx/custom
 
+# Also remove any enablement inherited from the base, not just RPM presets.
+systemctl disable cockpit.socket
+
 # Example using COPR with isolated pattern:
 # copr_install_isolated "ublue-os/staging" package-name
 
