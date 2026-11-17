@@ -33,6 +33,7 @@ local_image := "localhost/" + IMAGE_NAME
 
 vm_name := IMAGE_NAME + "-vm"
 k3s_vm_name := IMAGE_NAME + "-k3s"
+k3s_image := "localhost/" + IMAGE_NAME + "-k3s:install"
 
 [private]
 default:
@@ -164,10 +165,16 @@ vm-test tag=DEFAULT_TAG:
 vm-clean:
     {{ BCVK }} libvirt --connect {{ BCVK_CONNECTION }} rm --force {{ vm_name }}
 
-# A separate VM large enough for k3s; k3s is enabled in it at test time.
+# A k3s-sized VM from a derived build, as composefs-vm-test installs; k3s is enabled at test time.
 [group('Virtual Machine')]
 k3s-vm-create tag=DEFAULT_TAG:
-    {{ BCVK }} libvirt --connect {{ BCVK_CONNECTION }} run --replace --name {{ k3s_vm_name }} --target-transport containers-storage --filesystem btrfs --memory 8G --cpus 4 --disk-size 40G --detach --ssh-wait "{{ local_image }}:{{ tag }}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source tests/libvirt-vm.sh
+    VM_NAME={{ k3s_vm_name }}
+    ${PODMAN} rmi --ignore "{{ k3s_image }}" >/dev/null
+    derive_image "{{ local_image }}:{{ tag }}" "{{ tag }}" /usr/share/atomic-linux-k3s-test "{{ k3s_image }}" >/dev/null
+    vm_install --replace --memory 8G --cpus 4 --disk-size 40G "{{ k3s_image }}"
 
 # Enable k3s in the test VM and run the image's bounded k3s acceptance check.
 [group('Virtual Machine')]
@@ -184,9 +191,10 @@ composefs-vm-test tag=DEFAULT_TAG:
 transient-etc-vm-test tag="transient-etc" report="output/transient-etc-report.md":
     bash tests/transient-etc-vm-test.sh "{{ local_image }}:{{ tag }}" "{{ report }}"
 
-# Remove the k3s test VM.
+# Remove the k3s test VM and its derived image.
 [group('Virtual Machine')]
 k3s-vm-clean:
+    ${PODMAN} rmi --ignore "{{ k3s_image }}"
     {{ BCVK }} libvirt --connect {{ BCVK_CONNECTION }} rm --force {{ k3s_vm_name }}
 
 # Nested-KVM KubeVirt acceptance in a disposable VM (KEEP_FAILED_VM=1 keeps a failed one).

@@ -10,7 +10,6 @@
 set -euo pipefail
 
 image="${1:?usage: $0 IMAGE}"
-PODMAN="${PODMAN:-podman}"
 # shellcheck source=tests/libvirt-vm.sh
 source "$(dirname "$0")/libvirt-vm.sh"
 
@@ -23,11 +22,9 @@ VM_NAME="atomic-linux-composefs-${run_id:0:8}"
 test_repo="localhost/atomic-linux-composefs-test-${run_id:0:8}"
 created=0
 built_ids=()
-builddir=$(mktemp -d)
 
 cleanup() {
 	status=$?
-	rm -rf "${builddir}"
 	if ((status != 0 && ${KEEP_FAILED_VM:-0} == 1)); then
 		printf 'Retaining failed VM %s and its images %s:*\n' "${VM_NAME}" "${test_repo}" >&2
 		exit "${status}"
@@ -45,9 +42,9 @@ trap cleanup EXIT
 
 # Build IMAGE plus a marker file naming the build, tagged as $2.
 derive() {
-	local marker=$1 tag=$2
-	printf 'FROM %s\nRUN echo %s > %s\n' "${image}" "${marker}" "${MARKER}" >"${builddir}/Containerfile"
-	built_ids+=("$("${PODMAN}" build --quiet --tag "${test_repo}:${tag}" "${builddir}")")
+	local id
+	id=$(derive_image "${image}" "$1" "${MARKER}" "${test_repo}:$2")
+	built_ids+=("${id}")
 }
 
 expect_marker() {
@@ -63,12 +60,9 @@ expect_marker() {
 derive one current
 derive three other
 
-# --update-from-host binds the host's containers-storage so that bootc
-# upgrade and switch in the VM see the images built above. Set created
-# first: a failed SSH wait can still leave a defined VM behind.
+# Set created first: a failed SSH wait can still leave a defined VM behind.
 created=1
-"${BCVK}" libvirt --connect "${BCVK_CONNECTION}" run --name "${VM_NAME}" --update-from-host \
-	--filesystem btrfs --disk-size 20G --memory 4G --cpus 4 --detach --ssh-wait "${test_repo}:current"
+vm_install --disk-size 20G --memory 4G --cpus 4 "${test_repo}:current"
 
 # shellcheck disable=SC2016 # expanded by the VM's shell
 vm 'set -eu
