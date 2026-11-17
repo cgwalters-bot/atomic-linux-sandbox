@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Lifecycle check for a composefs-native build (`just build-composefs`) in a
+# Lifecycle check for a composefs-native build (`just build`) in a
 # disposable libvirt VM: install, then upgrade, switch and rollback across
 # three derived images, with an /etc and /var edit that must survive.
 #
