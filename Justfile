@@ -186,6 +186,11 @@ k3s-vm-test:
 composefs-vm-test tag=DEFAULT_TAG:
     tests/composefs-vm-test.sh "{{ local_image }}:{{ tag }}"
 
+# Move a LUKS2+btrfs ostree host in a disposable VM with to-existing-root.
+[group('Virtual Machine')]
+to-existing-root-vm-test tag=DEFAULT_TAG:
+    bash tests/to-existing-root-vm-test.sh "{{ local_image }}:{{ tag }}"
+
 # Install a transient-/etc build in a disposable VM; report what writes /etc.
 [group('Virtual Machine')]
 transient-etc-vm-test tag="transient-etc" report="output/transient-etc-report.md":

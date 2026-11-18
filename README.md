@@ -224,7 +224,12 @@ from an earlier ostree build of this image, must not `bootc switch` or
 nothing here tests it. Such a host should stop
 `bootc-fetch-apply-updates.timer` and install fresh with `bootc install
 to-disk` or `bootc install to-existing-root` (see
-[docs/install.md](docs/install.md) and #68).
+[docs/install.md](docs/install.md) and #68). `just to-existing-root-vm-test`
+tests the second path in a disposable VM: from a Fedora bootc (ostree) host
+with an ext4 `/boot` and a TPM-unlocked LUKS2 root holding btrfs in
+`subvol=root`, it checks that the new system unlocks and boots composefs,
+keeps `rd.luks.uuid` and the subvolume `rootflags`, and leaves the old
+`/etc`, `/var` and home directory only under `/sysroot`.
 
 The builder stage installs whatever Fedora 45's repositories carry at build
 time; the base digest pins the build tools and manifest, not the packages.
