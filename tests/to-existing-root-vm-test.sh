@@ -91,6 +91,8 @@ make_start_disk() {
 	mount "${disk}-part3" /run/target/boot
 	mkdir /run/target/boot/efi
 	mount "${disk}-part2" /run/target/boot/efi
+	# console=ttyS0 is for the start host only, so its kernel reaches the
+	# serial log; the new system's does only if to-existing-root keeps it.
 	export STORAGE_OPTS=additionalimagestore=/run/virtiofs-mnt-hoststorage
 	podman run --rm --privileged --pid=host --net=none --env=STORAGE_OPTS \
 		-v /run/virtiofs-mnt-hoststorage:/run/virtiofs-mnt-hoststorage \
@@ -99,7 +101,7 @@ make_start_disk() {
 		bootc install to-filesystem --generic-image --skip-fetch-check \
 		--karg "rd.luks.uuid=${luks_uuid}" \
 		--karg "rd.luks.key=${luks_uuid}=/luks.key:UUID=${boot_uuid}" \
-		--karg rootflags=subvol=root /target
+		--karg rootflags=subvol=root --karg console=ttyS0,115200n8 /target
 	# The install is left exactly as bootc finalizes it, which includes
 	# remounting /boot read-only; reopen it only to add the key file, as an
 	# installer adds files after its payload.
@@ -130,6 +132,31 @@ expect_root_kargs() {
 	fi
 }
 
+# Runs as root in the VM. Prints each BLS entry as its path, a tab and its
+# options: the composefs backend may write them to the /boot partition, the
+# physical root's /boot (/sysroot/boot on an ostree host) or the ESP. Also
+# names any UKI and GRUB's bootuuid.cfg, which says where GRUB reads entries.
+list_boot_entries() {
+	local esp=/run/atomic-linux-esp f
+	mkdir -p "${esp}"
+	if ! mount -o ro "$(lsblk -nrpo PATH,PARTTYPE | awk '$2 == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" { print $1; exit }')" "${esp}"; then
+		echo "warning: could not mount the ESP" >&2
+	fi
+	for f in /boot/loader/entries*/*.conf /sysroot/boot/loader/entries*/*.conf "${esp}"/loader/entries*/*.conf; do
+		[[ -f "${f}" ]] && printf '%s\t%s\n' "${f}" "$(sed -n 's/^options[[:space:]]*//p' "${f}")"
+	done
+	for f in "${esp}"/EFI/Linux/*.efi "${esp}"/EFI/*/bootuuid.cfg; do
+		[[ -f "${f}" ]] && printf '%s\t%s\n' "${f}" "$([[ "${f}" == *.cfg ]] && tr '\n' ' ' <"${f}" || echo UKI)"
+	done
+	umount "${esp}" 2>/dev/null || true
+}
+
+# Prints the end of the VM's serial console, for a boot that did not come back.
+print_console() {
+	echo "Last 200 lines of the serial console:" >&2
+	tail -n 200 "${work}/serial.log" | tr -d '\r' | sed -E 's/\x1b\[[0-9;?]*[A-Za-z]//g' >&2 || true
+}
+
 derive "${START_IMAGE}" ostree
 derive "${image}" composefs
 
@@ -148,7 +175,8 @@ setup=$(printf '%s\nmake_start_disk %q %q %q %q\n' "$(declare -f make_start_disk
 # image; its disk is then replaced with the one laid out above.
 created=1
 "${BCVK}" libvirt --connect "${BCVK_CONNECTION}" run --name "${VM_NAME}" --bind-storage-ro \
-	--filesystem btrfs --disk-size 20G --memory 4G --cpus 4 --detach --ssh-wait "${test_repo}:ostree"
+	--filesystem btrfs --disk-size 20G --memory 4G --cpus 4 --platform-console-log "${work}/serial.log" \
+	--detach --ssh-wait "${test_repo}:ostree"
 "${BCVK}" libvirt --connect "${BCVK_CONNECTION}" stop --force "${VM_NAME}"
 disk=$(virsh -c "${BCVK_CONNECTION}" domblklist "${VM_NAME}" --details | awk '$2 == "disk" { print $4; exit }')
 if [[ "${disk}" != *.qcow2 ]]; then
@@ -157,7 +185,7 @@ if [[ "${disk}" != *.qcow2 ]]; then
 fi
 cp "${work}/start.qcow2" "${disk}"
 "${BCVK}" libvirt --connect "${BCVK_CONNECTION}" start "${VM_NAME}"
-wait_for_boot ''
+wait_for_boot '' || { print_console; exit 1; }
 
 # Enroll the TPM without PCR binding, since the boot chain is replaced
 # below; then drop the key file so only the TPM unlocks root.
@@ -169,7 +197,7 @@ systemd-cryptenroll --unlock-key-file=/boot/luks.key --tpm2-device=auto --tpm2-p
 mount -o remount,rw /boot
 rm /boot/luks.key
 rpm-ostree kargs --delete='${key_karg}'"
-reboot_and_wait
+reboot_and_wait || { print_console; exit 1; }
 # shellcheck disable=SC2016 # expanded by the VM's shell
 vm 'set -eu
 if grep -q rd.luks.key /proc/cmdline; then
@@ -203,11 +231,19 @@ podman run --rm --privileged --pid=host --net=none --env=STORAGE_OPTS \
 	${test_repo}:composefs \
 	bootc install to-existing-root --composefs-backend --acknowledge-destructive --skip-fetch-check"
 
-# The composefs backend writes its BLS entries under the physical root's
-# /boot (/sysroot/boot on an ostree host), not necessarily the /boot the
-# running host mounts, so the kernel command line is checked only once the
-# new system has booted.
+# The entries that carry composefs= are the ones to-existing-root wrote; the
+# old ostree ones may still be beside them.
+boot_entries=$(vm "$(declare -f list_boot_entries); list_boot_entries")
+printf 'Boot entries after to-existing-root (path, options):\n%s\n' "${boot_entries}"
+composefs_options=$(awk -F '\t' '$2 ~ /(^| )composefs=/ { print $2 }' <<<"${boot_entries}")
+if [[ -n "${composefs_options}" ]]; then
+	expect_root_kargs "the boot entry to-existing-root wrote" "${composefs_options}"
+else
+	echo "warning: no boot entry with composefs= found; the reboot decides" >&2
+fi
+
 if ! reboot_and_wait; then
+	print_console
 	echo "error: the new system did not unlock root and boot" >&2
 	exit 1
 fi
