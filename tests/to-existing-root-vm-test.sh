@@ -202,9 +202,11 @@ podman run --rm --privileged --pid=host --net=none --env=STORAGE_OPTS \
 	-v /var/tmp:/var/tmp -v /dev:/dev -v /:/target --security-opt label=type:unconfined_t \
 	${test_repo}:composefs \
 	bootc install to-existing-root --composefs-backend --acknowledge-destructive --skip-fetch-check"
-expect_root_kargs "the boot entries to-existing-root wrote" \
-	"$(vm "sed -n 's/^options //p' /boot/loader/entries/*.conf")"
 
+# The composefs backend writes its BLS entries under the physical root's
+# /boot (/sysroot/boot on an ostree host), not necessarily the /boot the
+# running host mounts, so the kernel command line is checked only once the
+# new system has booted.
 if ! reboot_and_wait; then
 	echo "error: the new system did not unlock root and boot" >&2
 	exit 1
