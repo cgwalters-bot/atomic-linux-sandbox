@@ -30,7 +30,7 @@ COPY --from=brew /system_files /oci/brew
 # so no layer of the image carries them. rpm-ostree needs the privileges the
 # Justfile's build recipe passes. Alternative with the same layout:
 # quay.io/centos-bootc/centos-bootc:stream10.
-FROM quay.io/fedora/fedora-bootc:45@sha256:d3f0430d6a5f0df81eaebda4d4a4ea3c3fe2524dfbc135059e7811d35902309d AS builder
+FROM quay.io/fedora/fedora-bootc:45@sha256:69b66da0839f186f799addae6620aae19a6998b3fd4d2def00168c8dab50c486 AS builder
 RUN --mount=type=cache,dst=/var/cache/rpm-ostree \
     /usr/libexec/bootc-base-imagectl build-rootfs --manifest=standard --cachedir=/var/cache/rpm-ostree / /target-rootfs \
     && rm -rf /target-rootfs/ostree /target-rootfs/sysroot/ostree
