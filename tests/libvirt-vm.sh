@@ -40,9 +40,16 @@ vm() {
 
 # Waits for a new boot ID, so a slow shutdown is not mistaken for the reboot.
 reboot_and_wait() {
-	local old_boot new_boot remaining deadline=$((SECONDS + BOOT_WAIT_SECS))
+	local old_boot
 	old_boot=$(vm 'cat /proc/sys/kernel/random/boot_id')
 	vm 'systemctl reboot' || true
+	wait_for_boot "${old_boot}"
+}
+
+# Waits up to BOOT_WAIT_SECS for SSH to answer with a boot ID other than
+# $1 (empty: any boot).
+wait_for_boot() {
+	local old_boot=$1 new_boot remaining deadline=$((SECONDS + BOOT_WAIT_SECS))
 	while true; do
 		remaining=$((deadline - SECONDS))
 		if ((remaining <= 0)); then
