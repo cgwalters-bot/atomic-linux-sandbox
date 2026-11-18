@@ -1,9 +1,9 @@
 #!/usr/bin/bash
 # Moving an ostree host to this image in a disposable libvirt VM. The start
 # host is Fedora's ostree-based bootc image on a Fedora Atomic desktop's
-# layout: GPT with an ESP, an ext4 /boot, and a LUKS2 root unlocked by the
-# VM's TPM holding btrfs mounted with rootflags=subvol=root. With markers in
-# its /etc, /var and a home directory, it runs `bootc install
+# layout: GPT with BIOS boot and an ESP, an ext4 /boot, and a LUKS2 root
+# unlocked by the VM's TPM holding btrfs mounted with rootflags=subvol=root.
+# With markers in its /etc, /var and a home directory, it runs `bootc install
 # to-existing-root --composefs-backend` with IMAGE and reboots. The new
 # system must unlock and reach multi-user.target, keep rd.luks.uuid and the
 # subvolume rootflags, boot the composefs backend, and show the markers only
@@ -72,13 +72,15 @@ make_start_disk() {
 	mkdir /var/tmp/containers
 	rm -rf /var/lib/containers
 	ln -sr /var/tmp/containers /var/lib/containers
-	printf 'label: gpt\nsize=512MiB, type=U\nsize=1GiB, type=L\ntype=L\n' | sfdisk --quiet "${disk}"
+	# bootupd installs GRUB for BIOS too on x86_64, which needs a BIOS boot
+	# partition, as on Fedora's own bootc disk layouts.
+	printf 'label: gpt\nsize=1MiB, type=21686148-6449-6E6F-744E-656564454649\nsize=512MiB, type=U\nsize=1GiB, type=L\ntype=L\n' | sfdisk --quiet "${disk}"
 	udevadm settle
-	mkfs.fat -F 32 -n EFI-SYSTEM "${disk}-part1"
-	mkfs.ext4 -q -L boot -U "${boot_uuid}" "${disk}-part2"
+	mkfs.fat -F 32 -n EFI-SYSTEM "${disk}-part2"
+	mkfs.ext4 -q -L boot -U "${boot_uuid}" "${disk}-part3"
 	head -c 64 /dev/urandom >/run/luks.key
-	cryptsetup luksFormat --batch-mode --type luks2 --uuid "${luks_uuid}" --key-file /run/luks.key "${disk}-part3"
-	cryptsetup open --key-file /run/luks.key "${disk}-part3" root
+	cryptsetup luksFormat --batch-mode --type luks2 --uuid "${luks_uuid}" --key-file /run/luks.key "${disk}-part4"
+	cryptsetup open --key-file /run/luks.key "${disk}-part4" root
 	mkfs.btrfs -q -L fedora -U "${root_uuid}" /dev/mapper/root
 	mkdir /run/top /run/target
 	mount /dev/mapper/root /run/top
@@ -86,9 +88,9 @@ make_start_disk() {
 	umount /run/top
 	mount -o subvol=root /dev/mapper/root /run/target
 	mkdir /run/target/boot
-	mount "${disk}-part2" /run/target/boot
+	mount "${disk}-part3" /run/target/boot
 	mkdir /run/target/boot/efi
-	mount "${disk}-part1" /run/target/boot/efi
+	mount "${disk}-part2" /run/target/boot/efi
 	export STORAGE_OPTS=additionalimagestore=/run/virtiofs-mnt-hoststorage
 	podman run --rm --privileged --pid=host --net=none --env=STORAGE_OPTS \
 		-v /run/virtiofs-mnt-hoststorage:/run/virtiofs-mnt-hoststorage \
