@@ -43,10 +43,10 @@ readonly COMPOSEFS_MIN_BOOTC="1.17"
 # as the immutable prerelease forge-<sha12>, with a SHA256SUMS file whose
 # lines are copied here. Its RPMs are x86_64 builds for Fedora 44; on Fedora 45
 # they also pull in openssl3-libs, the OpenSSL 3 compatibility package.
-readonly BOOTC_FORGE_RELEASE="forge-63c743548946"
+readonly BOOTC_FORGE_RELEASE="forge-3ce5954c0c05"
 readonly BOOTC_FORGE_URL="https://github.com/cgwalters-forge/bootc/releases/download/${BOOTC_FORGE_RELEASE}"
 readonly BOOTC_FORGE_SHA256SUMS=(
-	"bdf8a6b6bca03825da8bee239e8007faeaf8ef8566f7b79615fa56d657df8acc  bootc-202611172113.g63c7435489-1.fc44.x86_64.rpm"
+	"75d2b3ebc36e386ea3938a0bee7caa677b64540b0ec2d7cc4120bc44e67c8d24  bootc-202611182218.g3ce5954c0c-1.fc44.x86_64.rpm"
 )
 
 BOOTC_SOURCE="${BOOTC_SOURCE:-forge}"
