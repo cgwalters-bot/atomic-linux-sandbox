@@ -100,6 +100,10 @@ make_start_disk() {
 		--karg "rd.luks.uuid=${luks_uuid}" \
 		--karg "rd.luks.key=${luks_uuid}=/luks.key:UUID=${boot_uuid}" \
 		--karg rootflags=subvol=root /target
+	# The install is left exactly as bootc finalizes it, which includes
+	# remounting /boot read-only; reopen it only to add the key file, as an
+	# installer adds files after its payload.
+	mount -o remount,rw /run/target/boot
 	install -m 0400 /run/luks.key /run/target/boot/luks.key
 	umount -R /run/target
 	cryptsetup close root
