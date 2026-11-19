@@ -12,7 +12,8 @@
 # mount it at /ctx.
 
 # OCI context images, pinned by tag, never by digest: registries drop old
-# digests. common's tag is a projectbluefin/common commit and brew's a date.
+# digests. common's tag is a projectbluefin/common commit and brew's a date;
+# Renovate proposes bumps (renovate.json).
 FROM ghcr.io/projectbluefin/common:8820523 AS common
 FROM ghcr.io/ublue-os/brew:20261115 AS brew
 

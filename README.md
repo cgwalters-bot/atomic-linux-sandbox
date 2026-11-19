@@ -377,8 +377,9 @@ that its config is the image the VM jobs booted; nothing is rebuilt. A
 failed VM test leaves `stable` where it was, and `promote` skips a build
 that is no longer the head of `main`. The workflow's
 `GITHUB_TOKEN` (`packages: write`) is the only credential, and the job
-summaries print the digest. Images are pinned by tag, not digest; Dependabot
-proposes bumps of the action pins.
+summaries print the digest. Images are pinned by tag, not digest; Renovate
+proposes bumps of the context image tags and busybox, and Dependabot of the
+action pins.
 
 CI builds, tests and publishes only the default desktop variant so far, so
 `stable` and the version tags stay a GNOME desktop. The server variant is not
