@@ -232,7 +232,7 @@ keeps `rd.luks.uuid` and the subvolume `rootflags`, and leaves the old
 `/etc`, `/var` and home directory only under `/sysroot`.
 
 The builder stage installs whatever Fedora 45's repositories carry at build
-time; the base digest pins the build tools and manifest, not the packages.
+time; the base tag picks the Fedora release, not the packages.
 
 **Signatures.** On composefs, bootc ignores
 `--enforce-container-sigpolicy` and records the origin as unverified, but
