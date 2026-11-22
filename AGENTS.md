@@ -27,7 +27,8 @@ rules come from [cgwalters-forge/agenthome](https://github.com/cgwalters-forge/a
 - `tests/kubevirt/`: the nested-KVM acceptance fixture for `just kubevirt-test`.
 - `.github/workflows/build.yml`: lint, image build, VM tests (`vm-smoke`,
   `vm-k3s`, `vm-lifecycle`) on PRs; on `main`, push as `git-<sha>` and
-  promote that digest to `stable` once the VM tests pass.
+  promote that digest to `stable` once the VM tests pass. `image-utah` and
+  `vm-utah-*` build and boot the Utah variant on PRs, not required by `ci`.
 
 ## Build, lint and test
 

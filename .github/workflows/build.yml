@@ -23,6 +23,7 @@ env:
   IMAGE_NAME: atomic-linux
   IMAGE_VENDOR: cgwalters-forge
   DEFAULT_TAG: stable
+  UTAH_TAG: utah
 
 jobs:
   # The shared workflow check: actionlint, zizmor and the runner-label policy.
@@ -214,6 +215,145 @@ jobs:
           set -euo pipefail
           sudo prlimit --pid "$$" --nofile=524288:524288
           just to-existing-root-vm-test "${DEFAULT_TAG}"
+
+  # The experimental Utah variant (Containerfile.utah), built and booted
+  # with the same VM suites as the default image. It is never pushed and
+  # `ci` does not wait on it, so its failures do not block a merge. It runs
+  # only on pull requests and by hand, so it cannot delay main's
+  # uncancelled runs and their promotion. vm-utah-to-existing-root may
+  # fail: Utah's stock bootc lacks the fork's to-existing-root fixes.
+  image-utah:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      image-id: ${{ steps.save.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: projectbluefin/actions/bootc-build/setup-runner@9eccc77361d4e1bdc8c412dd3b6573d8680d2246 # v1
+        with:
+          storage-backend: btrfs
+          native-overlay: "true"
+          update-podman: "true"
+          install-tools: '["just"]'
+
+      - name: Build
+        run: sudo -E "$(command -v just)" build-utah "${UTAH_TAG}"
+
+      - name: Save the image for the VM tests
+        id: save
+        run: |
+          set -euo pipefail
+          local_ref="localhost/${IMAGE_NAME}:${UTAH_TAG}"
+          echo "image-id=sha256:$(sudo podman image inspect "${local_ref}" --format '{{ .Id }}')" >> "${GITHUB_OUTPUT}"
+          sudo podman save "${local_ref}" | zstd -T0 -3 -q -o "${RUNNER_TEMP}/image.tar.zst"
+          ls -l "${RUNNER_TEMP}/image.tar.zst"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-utah
+          path: ${{ runner.temp }}/image.tar.zst
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+
+  # A copy of the vm job's steps against the Utah archive; keep the two in
+  # sync (see the comments there).
+  vm-utah:
+    name: vm-utah-${{ matrix.suite }}
+    needs: image-utah
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    continue-on-error: ${{ matrix.suite == 'to-existing-root' }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [smoke, k3s, lifecycle, to-existing-root]
+    env:
+      # renovate: datasource=github-releases depName=bootc-dev/bcvk
+      BCVK_VERSION: 0.21.0
+      BCVK_SHA256: 3135cc59b8971193b49be6cbaee12b789391ac6e6ab5ed3edf17082b03f144dd
+      LIBVIRT_DEFAULT_URI: qemu:///session
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h / "${RUNNER_TEMP}"
+
+      - name: Install the virtualization stack and bcvk
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends just zstd podman qemu-system-x86 qemu-utils virtiofsd \
+            libvirt-daemon-system python3-virt-firmware genisoimage ovmf-generic ovmf-amdsev- swtpm swtpm-tools
+          tarball="${RUNNER_TEMP}/bcvk.tar.gz"
+          curl --fail --silent --show-error --location --retry 5 --output "${tarball}" \
+            "https://github.com/bootc-dev/bcvk/releases/download/v${BCVK_VERSION}/bcvk-x86_64-unknown-linux-gnu.tar.gz"
+          printf '%s  %s\n' "${BCVK_SHA256}" "${tarball}" | sha256sum --check --strict
+          tar -xzf "${tarball}" -C "${RUNNER_TEMP}" bcvk-x86_64-unknown-linux-gnu
+          sudo install -m 0755 "${RUNNER_TEMP}/bcvk-x86_64-unknown-linux-gnu" /usr/local/bin/bcvk
+          test -r /dev/kvm && test -w /dev/kvm
+          bcvk --version
+          podman --version
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-utah
+          path: ${{ runner.temp }}
+
+      - name: Load the image
+        env:
+          IMAGE_ID: ${{ needs.image-utah.outputs.image-id }}
+        run: |
+          set -euo pipefail
+          zstd -dc "${RUNNER_TEMP}/image.tar.zst" | podman load
+          rm -f "${RUNNER_TEMP}/image.tar.zst"
+          loaded="sha256:$(podman image inspect "localhost/${IMAGE_NAME}:${UTAH_TAG}" --format '{{ .Id }}')"
+          if [[ "${loaded}" != "${IMAGE_ID}" ]]; then
+            echo "::error::Loaded image ${loaded} is not the built image ${IMAGE_ID}"
+            exit 1
+          fi
+          df -h /
+
+      - name: Ephemeral smoke test
+        if: matrix.suite == 'smoke'
+        run: just ephemeral-smoke "${UTAH_TAG}"
+
+      - name: k3s VM test
+        if: matrix.suite == 'k3s'
+        run: |
+          set -euo pipefail
+          sudo prlimit --pid "$$" --nofile=524288:524288
+          just k3s-vm-create "${UTAH_TAG}"
+          just k3s-vm-test
+
+      - name: Install, upgrade, switch and rollback
+        if: matrix.suite == 'lifecycle'
+        run: |
+          set -euo pipefail
+          sudo prlimit --pid "$$" --nofile=524288:524288
+          just composefs-vm-test "${UTAH_TAG}"
+
+      - name: Move a LUKS2+btrfs ostree host with to-existing-root
+        if: matrix.suite == 'to-existing-root'
+        run: |
+          set -euo pipefail
+          sudo prlimit --pid "$$" --nofile=524288:524288
+          just to-existing-root-vm-test "${UTAH_TAG}"
 
   # Moves the version tag and `stable` to the digest the VM jobs tested, by
   # retagging it in the registry: nothing is rebuilt or re-uploaded. A
