@@ -1,7 +1,7 @@
 # atomic-linux on Project Bluefin's Utah (a Hummingbird-based GNOME
 # workstation), built with `just build-utah`; see "Utah variant" in the
-# README. It keeps Utah's desktop, Flatpaks and update policy and adds our
-# host pieces with build/utah.sh. The default image (Containerfile) does not
+# README. It keeps Utah's desktop and update policy and adds our host
+# pieces and Flatpak list with build/utah.sh. The default image does not
 # depend on this file.
 
 FROM scratch AS ctx
@@ -50,4 +50,9 @@ RUN rm -f /ostree \
     && if [ -e /ostree ] || [ -L /ostree ] || [ -e /sysroot/ostree ]; then \
         echo "error: the image carries /ostree or /sysroot/ostree" >&2; exit 1; \
     fi \
+    && for unit in sshd.service sshd.socket; do \
+        if [ "$(systemctl is-enabled "$unit")" != disabled ]; then \
+            echo "error: Utah must ship $unit disabled" >&2; exit 1; \
+        fi; \
+    done \
     && bootc container lint --fatal-warnings

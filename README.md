@@ -352,12 +352,25 @@ workstation on Red Hat's Hummingbird packages, plus our host pieces from
 `build/utah.sh`. Those are k3s (installed but disabled, with its preflight,
 configuration and firewalld zone), the locked-down `FedoraWorkstation` zone
 as the default in place of Utah's `lax`, the `bootc install` configuration,
-key-only sshd enabled, the composefs-native setup and `image-info.json`. Utah's
-desktop, Flatpaks, update policy and bootc (1.17.4, without the fork's
-`to-existing-root` fixes) are kept. Unlike the default image's base and
-context images, Utah is pinned by its dated `testing-YYYYMMDD-<sha7>` tag,
-not a digest. The default image does not change. The VM recipes take the tag,
-e.g. `just composefs-vm-test utah`, `just k3s-vm-create utah`.
+key-only sshd settings, the composefs-native setup and `image-info.json`.
+`sshd.service` stays disabled by default, so the image does not open an SSH
+listener on TCP port 22. Utah's preinstall service adds the
+[#80 Flathub apps](build/utah.preinstall) alongside its existing Flatpaks on
+first boot; the apps are not baked into the image.
+
+Utah keeps its own bootc (1.17.4, without the fork's `to-existing-root`
+fixes) and ships Universal Blue's `uupd` updater with Dakota's systemd units
+and hardware checks. The daily `uupd.timer` runs at 04:00; Utah also ships
+triggers for resume and connecting AC power. `uupd` uses `bootc upgrade`
+to stage an OS deployment for the next reboot without rebooting the
+machine. Utah masks `bootc-fetch-apply-updates.timer` and its service; it
+does not use the default image's update timer or drop-in.
+
+Unlike the default image's base and context images, Utah is pinned by its
+dated `testing-YYYYMMDD-<sha7>` tag, not a digest. The default image does not
+change. The VM recipes take the tag, e.g. `just composefs-vm-test utah`,
+`just k3s-vm-create utah`; enable sshd in a disposable derivative for these
+SSH-based tests, as the Utah VM jobs do.
 
 Status: it builds and passes `bootc container lint` (November 2026). CI's
 `image-utah` and `vm-utah-*` jobs build it and run the default image's VM

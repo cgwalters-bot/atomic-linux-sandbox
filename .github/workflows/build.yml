@@ -329,6 +329,13 @@ jobs:
           fi
           df -h /
 
+      - name: Enable SSH in the disposable Utah test image
+        run: |
+          set -euo pipefail
+          local_ref="localhost/${IMAGE_NAME}:${UTAH_TAG}"
+          printf 'FROM %s\nRUN systemctl enable sshd.service\n' "${local_ref}" |
+            podman build --pull=never --tag "${local_ref}" --file - .
+
       - name: Ephemeral smoke test
         if: matrix.suite == 'smoke'
         run: just ephemeral-smoke "${UTAH_TAG}"
