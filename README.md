@@ -339,6 +339,24 @@ CI does not exercise this variant. Draw no
 conclusions about machine-id or installer configuration behavior until a
 measured report is linked here.
 
+## Utah variant (experimental)
+
+`just build-utah` builds `atomic-linux:utah` from `Containerfile.utah`:
+Project Bluefin's [Utah](https://github.com/projectbluefin/utah), a GNOME
+workstation on Red Hat's Hummingbird packages, plus our host pieces from
+`build/utah.sh`. Those are k3s (installed but disabled, with its preflight,
+configuration and firewalld zone), the locked-down `FedoraWorkstation` zone
+as the default in place of Utah's `lax`, the `bootc install` configuration,
+key-only sshd enabled, the composefs-native setup and `image-info.json`. Utah's
+desktop, Flatpaks, update policy and bootc (1.17.4, without the fork's
+`to-existing-root` fixes) are kept. Unlike the default image's base and
+context images, Utah is pinned by its dated `testing-YYYYMMDD-<sha7>` tag,
+not a digest. The default image does not change. The VM recipes take the tag,
+e.g. `just composefs-vm-test utah`, `just k3s-vm-create utah`.
+
+Status: it builds and passes `bootc container lint` (November 2026), but it
+has not booted yet, and CI does not build it.
+
 ## Build and test
 
 ```sh
