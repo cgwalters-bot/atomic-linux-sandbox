@@ -219,7 +219,12 @@ just composefs-vm-test stable              # install, upgrade, switch, rollback
 root and checks that the composefs backend is booted, that an `/etc` and a
 `/var` edit survive `bootc upgrade`, and that `bootc switch` and
 `bootc rollback` boot the expected images, with SELinux enforcing and the k3s
-preflight unit working.
+preflight unit working. It and `to-existing-root-vm-test` also print what
+started the installed system (`bootctl status`, the LoaderInfo EFI variable,
+`bootc status`), the Secure Boot state, the ESP's size and free space and the
+size of the shipped kernel and initramfs. They require `bootc status` to
+report `EXPECT_BOOTLOADER` (default `grub`) and the ESP to fit three
+deployments' kernels, which a systemd-boot default would need.
 
 **Moving from ostree.** An existing ostree host, including one installed
 from an earlier ostree build of this image, must not `bootc switch` or
