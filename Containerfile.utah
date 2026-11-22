@@ -1,0 +1,53 @@
+# atomic-linux on Project Bluefin's Utah (a Hummingbird-based GNOME
+# workstation), built with `just build-utah`; see "Utah variant" in the
+# README. It keeps Utah's desktop, Flatpaks and update policy and adds our
+# host pieces with build/utah.sh. The default image (Containerfile) does not
+# depend on this file.
+
+FROM scratch AS ctx
+COPY build /build
+COPY custom /custom
+
+# Pinned by Utah's dated tag rather than a digest, by operator decision
+# (#95); bump it to a newer testing-YYYYMMDD-<sha7> tag in its own change.
+FROM ghcr.io/projectbluefin/utah:testing-20261122-084f96f
+
+# clean-stage.sh needs dnf5 config-manager and versionlock; the same setup
+# as the default image's base stage.
+RUN --mount=type=cache,dst=/var/cache/libdnf5 \
+    dnf5 install -y dnf5-plugins \
+    && cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.tmp \
+    && mv /etc/dnf/dnf.conf.tmp /etc/dnf/dnf.conf \
+    && dnf5 config-manager setopt keepcache=1 install_weak_deps=0
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=cache,dst=/var/cache/libdnf5 \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    bash /ctx/build/utah.sh
+
+ARG IMAGE_NAME="atomic-linux"
+ARG IMAGE_VENDOR="cgwalters-forge"
+ARG IMAGE_REGISTRY="ghcr.io/cgwalters-forge"
+ARG UBLUE_IMAGE_TAG="utah"
+ARG BASE_IMAGE_NAME="utah"
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/boot \
+    --mount=type=tmpfs,dst=/tmp \
+    install -D -m 0755 /ctx/build/00-image-info.sh /usr/libexec/atomic-linux/write-image-info \
+    && /usr/libexec/atomic-linux/write-image-info
+
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    --mount=type=tmpfs,dst=/boot \
+    /ctx/build/clean-stage.sh
+
+# Utah is an ostree image: drop its /ostree link, as the default image's
+# builder stage does, so bootc installs the composefs backend. Checks share
+# the last step, since an empty final layer breaks the composefs install.
+RUN rm -f /ostree \
+    && if [ -e /ostree ] || [ -L /ostree ] || [ -e /sysroot/ostree ]; then \
+        echo "error: the image carries /ostree or /sysroot/ostree" >&2; exit 1; \
+    fi \
+    && bootc container lint --fatal-warnings

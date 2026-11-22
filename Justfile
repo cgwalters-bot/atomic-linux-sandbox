@@ -84,6 +84,29 @@ build tag=DEFAULT_TAG:
 build-transient-etc tag="transient-etc":
     ETC_MODE=transient {{ just_executable() }} --justfile "{{ justfile() }}" build {{ tag }}
 
+# The variant FROM projectbluefin/utah (Containerfile.utah), as IMAGE_NAME:tag.
+[group('Image')]
+build-utah tag="utah":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    revision=$(git rev-parse HEAD 2>/dev/null || true)
+    source_url="https://github.com/${IMAGE_VENDOR}/${IMAGE_NAME}"
+    ${PODMAN} build \
+        --file Containerfile.utah \
+        --security-opt=label=disable \
+        --build-arg "IMAGE_NAME=${IMAGE_NAME}" \
+        --build-arg "IMAGE_VENDOR=${IMAGE_VENDOR}" \
+        --build-arg "UBLUE_IMAGE_TAG={{ tag }}" \
+        --label "org.opencontainers.image.title=${IMAGE_NAME}" \
+        --label "org.opencontainers.image.version={{ tag }}.$(date -u +%Y%m%d)" \
+        --label "org.opencontainers.image.description=Generic bootc host image, Utah variant" \
+        --label "org.opencontainers.image.source=${source_url}" \
+        --label "org.opencontainers.image.url=${source_url}" \
+        --label "org.opencontainers.image.revision=${revision}" \
+        --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --tag "${IMAGE_NAME}:{{ tag }}" \
+        .
+
 # ShellCheck over build scripts, host helpers and tests, plus audit parser tests.
 [group('Quality')]
 lint:
@@ -105,6 +128,7 @@ signing-test:
 [group('Quality')]
 hadolint:
     ${PODMAN} run --rm -i -v "$PWD/.hadolint.yaml:/.config/hadolint.yaml:ro,Z" docker.io/hadolint/hadolint:v2.12.0 < Containerfile
+    ${PODMAN} run --rm -i -v "$PWD/.hadolint.yaml:/.config/hadolint.yaml:ro,Z" docker.io/hadolint/hadolint:v2.12.0 < Containerfile.utah
 
 # Justfile formatting.
 [group('Quality')]
