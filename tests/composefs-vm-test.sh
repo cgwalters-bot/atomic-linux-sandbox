@@ -1,11 +1,13 @@
 #!/usr/bin/bash
 # Lifecycle check for a composefs-native build (`just build`) in a
 # disposable libvirt VM: install, then upgrade, switch and rollback across
-# three derived images, with an /etc and /var edit that must survive.
+# three derived images, with an /etc and /var edit that must survive. After
+# the install it records which bootloader started the system, the Secure
+# Boot state and the ESP's headroom (libvirt-vm.sh, report_boot).
 #
 # Usage: composefs-vm-test.sh IMAGE (e.g. localhost/atomic-linux:composefs)
-# Environment: BCVK, BCVK_CONNECTION, PODMAN; KEEP_FAILED_VM=1 keeps a
-# failed VM for debugging.
+# Environment: BCVK, BCVK_CONNECTION, PODMAN, EXPECT_BOOTLOADER (grub);
+# KEEP_FAILED_VM=1 keeps a failed VM for debugging.
 
 set -euo pipefail
 
@@ -74,6 +76,7 @@ systemctl is-active k3s-preflight.service
 echo local-etc > /etc/atomic-linux-composefs-test
 echo local-var > /var/atomic-linux-composefs-test'
 expect_marker one
+check_boot
 
 derive two current
 vm 'bootc upgrade'

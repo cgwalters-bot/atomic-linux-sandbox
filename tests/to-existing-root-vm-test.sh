@@ -7,11 +7,14 @@
 # to-existing-root --composefs-backend` with IMAGE and reboots. The new
 # system must unlock and reach multi-user.target, keep rd.luks.uuid and the
 # subvolume rootflags, boot the composefs backend, and show the markers only
-# in the old stateroot under /sysroot.
+# in the old stateroot under /sysroot. It also records which bootloader
+# started the new system, the Secure Boot state and the headroom of the
+# reused ESP (libvirt-vm.sh, report_boot).
 #
 # Usage: to-existing-root-vm-test.sh IMAGE (e.g. localhost/atomic-linux:stable)
-# Environment: BCVK, BCVK_CONNECTION, PODMAN, START_IMAGE; KEEP_FAILED_VM=1
-# keeps a failed VM for debugging. Needs qemu-img and virsh.
+# Environment: BCVK, BCVK_CONNECTION, PODMAN, START_IMAGE, EXPECT_BOOTLOADER
+# (grub); KEEP_FAILED_VM=1 keeps a failed VM for debugging. Needs qemu-img
+# and virsh.
 
 set -euo pipefail
 
@@ -232,15 +235,16 @@ podman run --rm --privileged --pid=host --net=none --env=STORAGE_OPTS \
 	${test_repo}:composefs \
 	bootc install to-existing-root --composefs-backend --acknowledge-destructive --skip-fetch-check"
 
-# The entries that carry composefs= are the ones to-existing-root wrote; the
-# old ostree ones may still be beside them.
+# The entries that carry a composefs karg (composefs.digest= today, once
+# composefs=) are the ones to-existing-root wrote; the old ostree ones may
+# still be beside them.
 boot_entries=$(vm "$(declare -f list_boot_entries); list_boot_entries")
 printf 'Boot entries after to-existing-root (path, options):\n%s\n' "${boot_entries}"
-composefs_options=$(awk -F '\t' '$2 ~ /(^| )composefs=/ { print $2 }' <<<"${boot_entries}")
+composefs_options=$(awk -F '\t' '$2 ~ /(^| )composefs(\.[^= ]+)?=/ { print $2 }' <<<"${boot_entries}")
 if [[ -n "${composefs_options}" ]]; then
 	expect_root_kargs "the boot entry to-existing-root wrote" "${composefs_options}"
 else
-	echo "warning: no boot entry with composefs= found; the reboot decides" >&2
+	echo "warning: no boot entry with a composefs karg found; the reboot decides" >&2
 fi
 
 if ! reboot_and_wait; then
@@ -253,6 +257,7 @@ vm 'set -eu
 systemctl is-system-running --wait >/dev/null || true
 systemctl is-active multi-user.target
 bootc status --format=json | jq -e ".status.booted.composefs != null and .status.booted.ostree == null" >/dev/null'
+check_boot
 booted=$(vm "cat ${MARKER}")
 if [[ "${booted}" != composefs ]]; then
 	echo "error: booted marker is '${booted}', expected 'composefs'" >&2
