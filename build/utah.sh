@@ -1,9 +1,8 @@
 #!/usr/bin/bash
 # Add atomic-linux's host pieces to Utah (Containerfile.utah): k3s and its
 # configuration, the firewalld zones, the install configuration, key-only
-# sshd (enabled, since bcvk's VM install waits for SSH) and the
-# composefs-native setup. Utah's desktop, Flatpaks and update policy stay as
-# they are, and so does its bootc.
+# sshd settings and the composefs-native setup. Keep Utah's desktop,
+# updater and bootc, and extend its Flatpak preinstall list.
 
 set -euo pipefail
 
@@ -26,9 +25,10 @@ echo "::group:: atomic-linux files for Utah"
 for path in "${SYSTEM_PATHS[@]}"; do
 	rsync -rvK --relative "/ctx/custom/system/./${path}" /
 done
-# Utah's presets disable sshd as a desktop default.
-systemctl enable sshd.service
 echo "::endgroup::"
+
+# Use Utah's existing preinstall service and Flathub remote.
+install -Dm0644 /ctx/build/utah.preinstall /usr/share/flatpak/preinstall.d/atomic-linux-utah.preinstall
 
 # fedora keeps the base image's bootc, here Utah's (1.17.4 when this was
 # written), which lacks the fork's to-existing-root fixes.
