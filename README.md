@@ -354,8 +354,11 @@ context images, Utah is pinned by its dated `testing-YYYYMMDD-<sha7>` tag,
 not a digest. The default image does not change. The VM recipes take the tag,
 e.g. `just composefs-vm-test utah`, `just k3s-vm-create utah`.
 
-Status: it builds and passes `bootc container lint` (November 2026), but it
-has not booted yet, and CI does not build it.
+Status: it builds and passes `bootc container lint` (November 2026). CI's
+`image-utah` and `vm-utah-*` jobs build it and run the default image's VM
+suites on it (as the desktop variant) on pull requests and by hand; they are
+not required for a merge,
+the image is not pushed, and `vm-utah-to-existing-root` is allowed to fail.
 
 ## Build and test
 
